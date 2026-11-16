@@ -2228,6 +2228,8 @@ impl Studio {
                             if ui.button("Pokaż folder pliku").clicked() {
                                 let _ = std::process::Command::new(if cfg!(windows) {
                                     "explorer"
+                                } else if cfg!(target_os = "macos") {
+                                    "open"
                                 } else {
                                     "xdg-open"
                                 })

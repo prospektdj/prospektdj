@@ -1,6 +1,6 @@
 # Prospekt DJ — Rust Edition 2.1
 
-Natywny program DJ na **Windows i Linux x86_64**, napisany od nowa w Rust na podstawie funkcji pliku `Prospekt_DJ_Controller.html`. Bez Electrona, WebView, HTML, CSS, JavaScriptu i Node.js. Nie wykorzystuje kodu ani zasobów OpenFadeR. Poprzednia wersja Electron pozostała w osobnym projekcie.
+Natywny program DJ na **Windows i Linux x86_64 oraz macOS Apple Silicon / Intel**, napisany od nowa w Rust na podstawie funkcji pliku `Prospekt_DJ_Controller.html`. Bez Electrona, WebView, HTML, CSS, JavaScriptu i Node.js. Nie wykorzystuje kodu ani zasobów OpenFadeR. Poprzednia wersja Electron pozostała w osobnym projekcie.
 
 **100% własnego kodu aplikacji i testów jest w Rust.** Nie jest to deklaracja, że wszystkie sterowniki systemowe i zewnętrzne kodeki są napisane w Rust. Biblioteki systemowe audio/okien oraz opcjonalny FFmpeg pozostają zewnętrznymi zależnościami.
 
@@ -12,6 +12,12 @@ Licencja projektu: **GPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budo
 - Cztery efekty na deck: filtr LPF/HPF, echo z synchronizacją BPM, reverb i flanger; bypass i sterowanie MIDI.
 - Proste pokrętła z resetem podwójnym kliknięciem i cienkie suwaki. Wyśrodkowany panel master/monitor; czerwona ikona nagrywania pod crossfaderem, kwadrat zatrzymania podczas nagrywania.
 - Biblioteka z indeksowaniem w tle, pamięcią metadanych, skrzynkami, sortowaniem, wyszukiwaniem wielu słów i naprawą ścieżek brakujących plików. Usunięcie z katalogu nie usuwa pliku z dysku.
+
+## Gotowe paczki
+
+Paczki dla Windows, Linux i macOS są publikowane przez workflow `Build and publish native packages` w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Obok archiwów dostępny jest plik SHA256SUMS.txt. Workflow kompiluje kod na runnerach odpowiednich systemów i publikuje wydanie dopiero po zakończeniu wszystkich czterech kompilacji.
+
+macOS 11+: wybierz `macos-arm64` dla Apple Silicon lub `macos-x64` dla Intela, rozpakuj ZIP i przenieś `Prospekt DJ.app` do Applications. Podpis jest ad hoc; aplikacja nie jest notaryzowana przez Apple. Funkcje sprzętowego audio i MIDI wymagają sprawdzenia na docelowym komputerze.
 
 ## Uruchamianie
 

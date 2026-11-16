@@ -2,3 +2,5 @@
 /dist/
 /test-output/
 *.tmp
+
+/release-dist/
