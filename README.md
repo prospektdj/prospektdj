@@ -6,6 +6,22 @@ Natywny program DJ na **Windows i Linux x86_64**, napisany od nowa w Rust na pod
 
 Licencja projektu: **GPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budowania znajdują się w paczce źródłowej. Licencje bibliotek są w `licenses/`, a ich lista w `docs/DEPENDENCIES.md`.
 
+## Zrzuty ekranu
+
+Zrzuty natywnej aplikacji na Linuxie, z utworami demonstracyjnymi i przykładową biblioteką.
+
+**Widok główny — dwa decki, fale RGB, sampler i biblioteka utworów.**
+
+![Prospekt DJ 2.1 — widok główny z dwoma deckami, samplerem i biblioteką](docs/screenshots/main.png)
+
+**DJ-FX — filtr LPF/HPF, echo z synchronizacją BPM, reverb i flanger.**
+
+![Prospekt DJ 2.1 — panel efektów DJ-FX](docs/screenshots/effects.png)
+
+**Mixer — korekcja HIGH/MID/LOW i poziomy obu kanałów.**
+
+![Prospekt DJ 2.1 — mikser z korekcją i poziomami kanałów](docs/screenshots/mixer.png)
+
 ## Zmiany w 2.1
 
 - Kompaktowe decki, białe talerze, dwie fale RGB z pasmami rzeczywistego sygnału i zakładki DJ-FX / Samples / Mixer. W wąskim oknie talerze ustępują miejsca kontrolkom.
@@ -23,7 +39,7 @@ Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_
 
 Windows 10/11 x64: rozpakuj archiwum i uruchom `prospekt-dj.exe`. Nie wymaga Node.js, przeglądarki ani instalowania Rusta. Program nie jest podpisany cyfrowo.
 
-Linux x64 z pulpitem: paczka z tego środowiska wymaga glibc 2.39+ (np. Ubuntu 24.04+ lub Debian 13). Na starszym systemie zbuduj program ze źródeł albo użyj workflow Ubuntu 22.04. Rozpakuj archiwum i uruchom `./prospekt-dj`. Wymagane są ALSA, X11/XWayland i sterownik OpenGL 3.3 lub zgodny Mesa. Systemowy wybór plików używa XDG Desktop Portal. Na Debianie/Ubuntu potrzebne biblioteki zwykle zapewniają pakiety `libasound2` (w nowszych wydaniach `libasound2t64`), `libx11-6`, `libxkbcommon0`, `libgl1`, `xdg-desktop-portal` i backend portalu odpowiedni dla pulpitu.
+Linux x64 z pulpitem: paczki z GitHub Releases są budowane na Ubuntu 22.04 i wymagają glibc 2.35+ (np. Ubuntu 22.04+ lub Debian 12+). Rozpakuj archiwum i uruchom `./prospekt-dj`. Wymagane są ALSA, X11/XWayland i sterownik OpenGL 3.3 lub zgodny Mesa. Systemowy wybór plików używa XDG Desktop Portal. Na Debianie/Ubuntu potrzebne biblioteki zwykle zapewniają pakiety `libasound2` (w nowszych wydaniach `libasound2t64`), `libx11-6`, `libxkbcommon0`, `libgl1`, `xdg-desktop-portal` i backend portalu odpowiedni dla pulpitu.
 
 Naciśnij **Demo 120 BPM**, następnie uruchom deck A/B. Parametr `--demo` wczytuje demo przy starcie. Pliki lub folder można przeciągać na okno; przy utworze przyciski A/B ładują odpowiedni deck.
 
@@ -97,7 +113,7 @@ Osobny odsłuch wymaga drugiego urządzenia udostępnionego przez system. Nie za
 
 Utwór wejściowy: do 100 MiB; zdekodowane PCM: do 512 MiB. Sample: plik do 32 MiB i czas do 120 sekund. CUE i sample pozostają danymi sesji. WAV ma ograniczenia rozmiaru kontenera RIFF; nie przeprowadzono wielogodzinnego testu nagrywania. Nadmiernie duże pliki oraz nieobsługiwane kodeki zwracają błąd w pasku stanu.
 
-Paczka Windows została skompilowana na Linux i sprawdzona jako plik PE x64, ale nie została uruchomiona na rzeczywistym Windows. Sprzęt MIDI, fizyczny odsłuch i opóźnienie wymagają sprawdzenia na komputerze docelowym.
+Paczki z GitHub Releases są kompilowane i testowane automatycznie na runnerach Windows i Linux. Instalacja pakietu .deb jest sprawdzana na Ubuntu. Sprzęt MIDI, fizyczny odsłuch i opóźnienie wymagają sprawdzenia na komputerze docelowym.
 
 ## Pliki projektu
 
