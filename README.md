@@ -1,7 +1,5 @@
 # Prospekt DJ — Rust Edition 2.1
 
-Natywny program DJ na **Windows i Linux x86_64**, napisany od nowa w Rust na podstawie funkcji pliku `Prospekt_DJ_Controller.html`. Bez Electrona, WebView, HTML, CSS, JavaScriptu i Node.js. Nie wykorzystuje kodu ani zasobów OpenFadeR. Poprzednia wersja Electron pozostała w osobnym projekcie.
-
 **100% własnego kodu aplikacji i testów jest w Rust.** Nie jest to deklaracja, że wszystkie sterowniki systemowe i zewnętrzne kodeki są napisane w Rust. Biblioteki systemowe audio/okien oraz opcjonalny FFmpeg pozostają zewnętrznymi zależnościami.
 
 Licencja projektu: **GPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budowania znajdują się w paczce źródłowej. Licencje bibliotek są w `licenses/`, a ich lista w `docs/DEPENDENCIES.md`.
