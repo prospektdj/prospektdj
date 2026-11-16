@@ -1,6 +1,6 @@
 # Prospekt DJ — Rust Edition 2.1
 
-Natywny program DJ na **Windows i Linux x86_64 oraz macOS Apple Silicon / Intel**, napisany od nowa w Rust na podstawie funkcji pliku `Prospekt_DJ_Controller.html`. Bez Electrona, WebView, HTML, CSS, JavaScriptu i Node.js. Nie wykorzystuje kodu ani zasobów OpenFadeR. Poprzednia wersja Electron pozostała w osobnym projekcie.
+Natywny program DJ na **Windows i Linux x86_64**, napisany od nowa w Rust na podstawie funkcji pliku `Prospekt_DJ_Controller.html`. Bez Electrona, WebView, HTML, CSS, JavaScriptu i Node.js. Nie wykorzystuje kodu ani zasobów OpenFadeR. Poprzednia wersja Electron pozostała w osobnym projekcie.
 
 **100% własnego kodu aplikacji i testów jest w Rust.** Nie jest to deklaracja, że wszystkie sterowniki systemowe i zewnętrzne kodeki są napisane w Rust. Biblioteki systemowe audio/okien oraz opcjonalny FFmpeg pozostają zewnętrznymi zależnościami.
 
@@ -15,9 +15,9 @@ Licencja projektu: **GPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budo
 
 ## Gotowe paczki
 
-Paczki dla Windows, Linux i macOS są publikowane przez workflow `Build and publish native packages` w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Obok archiwów dostępny jest plik SHA256SUMS.txt. Workflow kompiluje kod na runnerach odpowiednich systemów i publikuje wydanie dopiero po zakończeniu wszystkich czterech kompilacji.
+Paczki Windows x64 (ZIP), Linux x64 (tar.gz) i Debian/Ubuntu amd64 (.deb) są publikowane w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Sumy kontrolne są w SHA256SUMS.txt. Workflow buduje Windows i Linux, sprawdza archiwa i publikuje trzy paczki po zakończeniu obu zadań.
 
-macOS 11+: wybierz `macos-arm64` dla Apple Silicon lub `macos-x64` dla Intela, rozpakuj ZIP i przenieś `Prospekt DJ.app` do Applications. Podpis jest ad hoc; aplikacja nie jest notaryzowana przez Apple. Funkcje sprzętowego audio i MIDI wymagają sprawdzenia na docelowym komputerze.
+Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_2.1.0_amd64.deb`. Program pojawi się w menu aplikacji; można też uruchomić `prospekt-dj` w terminalu. Usunięcie: `sudo apt remove prospekt-dj`. Ustawienia w katalogu użytkownika pozostają zachowane. FFmpeg jest zalecany dla dodatkowych formatów nagrywania.
 
 ## Uruchamianie
 

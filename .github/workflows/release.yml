@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - 'scripts/package_release.py'
+      - 'scripts/package_deb.py'
 permissions:
   contents: read
 concurrency:
@@ -24,16 +25,8 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             platform: windows-x64
-          - os: macos-15
-            target: aarch64-apple-darwin
-            platform: macos-arm64
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            platform: macos-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    env:
-      MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,12 +48,26 @@ jobs:
       - run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Package and verify archive
         run: python scripts/package_release.py --target ${{ matrix.target }} --platform ${{ matrix.platform }}
+      - name: Build Debian installer
+        if: runner.os == 'Linux'
+        run: python scripts/package_deb.py --binary target/${{ matrix.target }}/release/prospekt-dj
+      - name: Verify Debian installation
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get install -y --no-install-recommends ./release-dist/*.deb
+          dpkg-query -W prospekt-dj
+          test -x /usr/bin/prospekt-dj
+          test -f /usr/share/applications/prospekt-dj.desktop
+          ldd /usr/bin/prospekt-dj | tee /tmp/prospekt-libraries.txt
+          ! grep -q 'not found' /tmp/prospekt-libraries.txt
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.platform }}
           path: |
             release-dist/*.zip
             release-dist/*.tar.gz
+            release-dist/*.deb
           if-no-files-found: error
   publish:
     needs: build
@@ -83,7 +90,7 @@ jobs:
           import re
           version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
           assets = sorted(Path('release-assets').glob('*'))
-          assert len(assets) == 4, f'Expected four native packages, got {len(assets)}'
+          assert len(assets) == 3, f'Expected three native packages, got {len(assets)}'
           Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
           with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
               file.write(f'RELEASE_TAG=rust-v{version}\nRELEASE_VERSION={version}\n')
@@ -93,10 +100,9 @@ jobs:
 
           - Windows x64: rozpakuj ZIP i uruchom prospekt-dj.exe.
           - Linux x64: rozpakuj tar.gz i uruchom ./prospekt-dj. Kompilacja na Ubuntu 22.04; wymagany pulpit, ALSA i OpenGL.
-          - macOS Apple Silicon: paczka macos-arm64.
-          - macOS Intel: paczka macos-x64.
+          - Debian/Ubuntu amd64: pobierz .deb i zainstaluj: sudo apt install ./prospekt-dj_2.1.0_amd64.deb. Pakiet dodaje program do menu aplikacji.
 
-          macOS: rozpakuj ZIP i przenieś Prospekt DJ.app do Applications. Wymagany macOS 11 lub nowszy. Aplikacja ma podpis ad hoc, bez notaryzacji Apple. Windows: brak podpisu wydawcy. Kompilacja i testy automatyczne nie zastępują testów fizycznego kontrolera MIDI i interfejsu audio.
+          Linux: Ubuntu 22.04+ / Debian 12+ (glibc 2.35+), wymagany pulpit. Windows: brak podpisu wydawcy. Testy automatyczne nie zastępują testów fizycznego kontrolera MIDI i interfejsu audio.
 
           WAV i AIFF działają bez dodatkowych kodeków. Dla pozostałych formatów nagrywania zainstaluj FFmpeg. Paczki zawierają dokumentację i licencje. Sumy kontrolne: SHA256SUMS.txt.
           NOTES
