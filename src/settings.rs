@@ -7,12 +7,19 @@ use std::{collections::BTreeSet, path::PathBuf};
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub effects: [crate::effects::FxSettings; 2],
+    pub effects: Vec<crate::effects::FxSettings>,
     pub library_sort: crate::library::Sort,
     pub library_descending: bool,
     pub show_effects: bool,
     pub dock_tab: usize,
     pub light: bool,
+    pub deck_count: usize,
+    pub language: String,
+    pub logo_font: Option<PathBuf>,
+    pub graphic_logo: bool,
+    pub controller_profiles: Vec<crate::midi::ControllerProfile>,
+    pub controller_profile: Option<usize>,
+    pub controller_profile_source: String,
     pub master_device: String,
     pub cue_device: String,
     pub latency_ms: u32,
@@ -32,12 +39,19 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            effects: [crate::effects::FxSettings::default(); 2],
+            effects: vec![crate::effects::FxSettings::default(); 4],
             library_sort: crate::library::Sort::Title,
             library_descending: false,
             show_effects: true,
             dock_tab: 1,
             light: false,
+            deck_count: 2,
+            language: "pl".into(),
+            logo_font: None,
+            graphic_logo: true,
+            controller_profiles: Vec::new(),
+            controller_profile: None,
+            controller_profile_source: String::new(),
             master_device: String::new(),
             cue_device: String::new(),
             latency_ms: 12,
@@ -74,9 +88,40 @@ pub fn load() -> Settings {
     s.width = s.width.clamp(1000., 3840.);
     s.height = s.height.clamp(720., 2160.);
     s.dock_tab = s.dock_tab.min(2);
+    s.deck_count = if s.deck_count == 4 { 4 } else { 2 };
+    s.effects.resize(4, crate::effects::FxSettings::default());
+    s.effects.truncate(4);
+    if !crate::i18n::LANGUAGES
+        .iter()
+        .any(|(code, _)| *code == s.language)
+    {
+        s.language = "pl".into();
+    }
     s
 }
 pub fn save(settings: &Settings) -> Result<()> {
+    // Built-in definitions live in the executable, not in the periodically saved user config.
+    let mut saved = settings.clone();
+    let selected = saved
+        .controller_profile
+        .and_then(|i| saved.controller_profiles.get(i))
+        .cloned();
+    saved.controller_profile_source = selected
+        .as_ref()
+        .filter(|p| p.source.starts_with("builtin:"))
+        .map(|p| p.source.clone())
+        .unwrap_or_default();
+    saved
+        .controller_profiles
+        .retain(|p| !p.source.starts_with("builtin:"));
+    saved.controller_profile = selected.and_then(|p| {
+        saved
+            .controller_profiles
+            .iter()
+            .position(|entry| *entry == p)
+    });
+    let settings = &saved;
+
     let path = config_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

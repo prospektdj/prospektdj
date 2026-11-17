@@ -6,6 +6,19 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct FxSettings {
     pub bypass: bool,
+    pub chorus_enabled: bool,
+    pub tremolo_enabled: bool,
+    pub distortion_enabled: bool,
+    pub crusher_enabled: bool,
+    pub chorus_mix: f32,
+    pub chorus_rate: f32,
+    pub tremolo_depth: f32,
+    pub tremolo_rate: f32,
+    pub drive: f32,
+    pub distortion_mix: f32,
+    pub crusher_bits: f32,
+    pub crusher_mix: f32,
+
     pub filter_enabled: bool,
     pub filter: f32,
     pub echo_enabled: bool,
@@ -26,6 +39,14 @@ pub struct FxSettings {
 #[derive(Clone, Copy, Debug)]
 pub enum FxParam {
     Filter,
+    ChorusMix,
+    ChorusRate,
+    TremoloDepth,
+    TremoloRate,
+    Drive,
+    DistortionMix,
+    CrusherBits,
+    CrusherMix,
     EchoMix,
     EchoFeedback,
     EchoMs,
@@ -38,6 +59,10 @@ pub enum FxParam {
 }
 #[derive(Clone, Copy, Debug)]
 pub enum FxSwitch {
+    Chorus,
+    Tremolo,
+    Distortion,
+    Crusher,
     Bypass,
     Filter,
     Echo,
@@ -49,6 +74,19 @@ impl Default for FxSettings {
     fn default() -> Self {
         Self {
             bypass: false,
+            chorus_enabled: false,
+            tremolo_enabled: false,
+            distortion_enabled: false,
+            crusher_enabled: false,
+            chorus_mix: 0.35,
+            chorus_rate: 0.6,
+            tremolo_depth: 0.6,
+            tremolo_rate: 4.0,
+            drive: 3.0,
+            distortion_mix: 0.3,
+            crusher_bits: 10.0,
+            crusher_mix: 0.4,
+
             filter_enabled: true,
             filter: 0.,
             echo_enabled: false,
@@ -78,6 +116,14 @@ fn sane(value: f32, default: f32, min: f32, max: f32) -> f32 {
 impl FxSettings {
     pub fn set(&mut self, param: FxParam, value: f32) {
         match param {
+            FxParam::ChorusMix => self.chorus_mix = value,
+            FxParam::ChorusRate => self.chorus_rate = value,
+            FxParam::TremoloDepth => self.tremolo_depth = value,
+            FxParam::TremoloRate => self.tremolo_rate = value,
+            FxParam::Drive => self.drive = value,
+            FxParam::DistortionMix => self.distortion_mix = value,
+            FxParam::CrusherBits => self.crusher_bits = value,
+            FxParam::CrusherMix => self.crusher_mix = value,
             FxParam::Filter => self.filter = value,
             FxParam::EchoMix => self.echo_mix = value,
             FxParam::EchoFeedback => self.echo_feedback = value,
@@ -96,6 +142,10 @@ impl FxSettings {
     }
     pub fn toggle(&mut self, switch: FxSwitch) {
         let value = match switch {
+            FxSwitch::Chorus => &mut self.chorus_enabled,
+            FxSwitch::Tremolo => &mut self.tremolo_enabled,
+            FxSwitch::Distortion => &mut self.distortion_enabled,
+            FxSwitch::Crusher => &mut self.crusher_enabled,
             FxSwitch::Bypass => &mut self.bypass,
             FxSwitch::Filter => &mut self.filter_enabled,
             FxSwitch::Echo => &mut self.echo_enabled,
@@ -106,6 +156,14 @@ impl FxSettings {
         *value = !*value;
     }
     pub fn sanitized(mut self) -> Self {
+        self.chorus_mix = sane(self.chorus_mix, 0.35, 0.0, 1.0);
+        self.chorus_rate = sane(self.chorus_rate, 0.6, 0.05, 5.0);
+        self.tremolo_depth = sane(self.tremolo_depth, 0.6, 0.0, 1.0);
+        self.tremolo_rate = sane(self.tremolo_rate, 4.0, 0.1, 16.0);
+        self.drive = sane(self.drive, 3.0, 1.0, 20.0);
+        self.distortion_mix = sane(self.distortion_mix, 0.3, 0.0, 1.0);
+        self.crusher_bits = sane(self.crusher_bits, 10.0, 4.0, 16.0);
+        self.crusher_mix = sane(self.crusher_mix, 0.4, 0.0, 1.0);
         self.filter = sane(self.filter, 0., -1., 1.);
         self.echo_mix = sane(self.echo_mix, 0.3, 0., 1.);
         self.echo_feedback = sane(self.echo_feedback, 0.35, 0., 0.85);
@@ -120,7 +178,11 @@ impl FxSettings {
         self
     }
     pub fn active_count(self) -> usize {
-        usize::from(self.filter_enabled && self.filter.abs() > 0.01)
+        usize::from(self.chorus_enabled)
+            + usize::from(self.tremolo_enabled)
+            + usize::from(self.distortion_enabled)
+            + usize::from(self.crusher_enabled)
+            + usize::from(self.filter_enabled && self.filter.abs() > 0.01)
             + usize::from(self.echo_enabled)
             + usize::from(self.reverb_enabled)
             + usize::from(self.flanger_enabled)
@@ -171,6 +233,9 @@ pub struct Effects {
     flanger: Delay,
     phase: f32,
     bpm: f64,
+    chorus: Delay,
+    chorus_phase: f32,
+    tremolo_phase: f32,
 }
 impl Effects {
     pub fn new(sample_rate: u32) -> Self {
@@ -194,6 +259,9 @@ impl Effects {
             flanger: Delay::new((sr * 0.015) as usize),
             phase: 0.,
             bpm: 0.,
+            chorus: Delay::new((sr * 0.05) as usize),
+            chorus_phase: 0.,
+            tremolo_phase: 0.,
         };
         fx.configure(FxSettings::default(), 120.);
         fx
@@ -236,6 +304,13 @@ impl Effects {
             self.flanger.clear();
             self.phase = 0.;
         }
+        if s.chorus_enabled && !previous.chorus_enabled {
+            self.chorus.clear();
+            self.chorus_phase = 0.;
+        }
+        if s.tremolo_enabled && !previous.tremolo_enabled {
+            self.tremolo_phase = 0.;
+        }
         let cutoff = if s.filter < 0. {
             20. * 1000f32.powf(1. + s.filter)
         } else {
@@ -245,6 +320,9 @@ impl Effects {
         self.filter_alpha = 1. - (-std::f32::consts::TAU * cutoff / self.sample_rate).exp();
     }
     pub fn reset(&mut self) {
+        self.chorus.clear();
+        self.chorus_phase = 0.;
+        self.tremolo_phase = 0.;
         self.echo.clear();
         self.flanger.clear();
         for c in &mut self.combs {
@@ -317,6 +395,37 @@ impl Effects {
             out = blend(out, delayed, s.flanger_mix);
             self.phase = (self.phase + std::f32::consts::TAU * s.flanger_rate / self.sample_rate)
                 % std::f32::consts::TAU;
+        }
+        if s.chorus_enabled {
+            let delay = self.sample_rate * (0.018 + 0.006 * self.chorus_phase.sin());
+            let wet = self.chorus.read(delay);
+            self.chorus.push(out);
+            out = blend(out, wet, s.chorus_mix);
+            self.chorus_phase = (self.chorus_phase
+                + std::f32::consts::TAU * s.chorus_rate / self.sample_rate)
+                % std::f32::consts::TAU;
+        }
+        if s.tremolo_enabled {
+            let gain = 1. - s.tremolo_depth * (0.5 + 0.5 * self.tremolo_phase.sin());
+            out = out.map(|x| x * gain);
+            self.tremolo_phase = (self.tremolo_phase
+                + std::f32::consts::TAU * s.tremolo_rate / self.sample_rate)
+                % std::f32::consts::TAU;
+        }
+        if s.distortion_enabled {
+            out = blend(
+                out,
+                out.map(|x| (x * s.drive).tanh() / s.drive.tanh()),
+                s.distortion_mix,
+            );
+        }
+        if s.crusher_enabled {
+            let steps = 2_f32.powf(s.crusher_bits.round() - 1.);
+            out = blend(
+                out,
+                out.map(|x| (x.clamp(-1., 1.) * steps).round() / steps),
+                s.crusher_mix,
+            );
         }
         out.map(|x| if x.is_finite() { x.clamp(-8., 8.) } else { 0. })
     }

@@ -32,15 +32,20 @@ pub fn relative(value: u8, encoding: Encoding) -> i16 {
         }
     }
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Mapping {
     pub status: u8,
     pub number: u8,
     pub action: String,
+    #[serde(default)]
     pub encoding: Encoding,
+    #[serde(default)]
+    pub inverted: bool,
+    #[serde(default)]
+    pub relative: bool,
 }
 pub fn key(data: &[u8]) -> Option<(u8, u8, u8)> {
-    if data.len() < 3 {
+    if data.len() < 3 || data[1] > 127 || data[2] > 127 {
         return None;
     }
     let s = data[0];
@@ -86,8 +91,8 @@ pub fn connect(index: usize, tx: Sender<Vec<u8>>) -> Result<Connection> {
     })
 }
 pub fn validate(maps: &[Mapping], actions: &[String]) -> Result<()> {
-    if maps.len() > 200 {
-        bail!("Mapa zawiera ponad 200 przypisań");
+    if maps.len() > 1024 {
+        bail!("Mapa zawiera ponad 1024 przypisań");
     }
     for m in maps {
         if !matches!(m.status & 0xf0, 0x90 | 0xb0) || m.number > 127 || !actions.contains(&m.action)
@@ -101,7 +106,9 @@ pub fn import_json(data: &[u8], actions: &[String]) -> Result<Vec<Mapping>> {
     if data.len() > 256 * 1024 {
         bail!("Plik mapy jest za duży");
     }
-    let entries: Vec<serde_json::Value> = serde_json::from_slice(data)?;
+    let value: serde_json::Value = serde_json::from_slice(data)?;
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_value(value.get("mappings").cloned().unwrap_or(value))?;
     let mut maps = Vec::new();
     for mut entry in entries {
         if let Some(key) = entry.get("key").and_then(|k| k.as_str()).map(str::to_owned) {
@@ -113,4 +120,208 @@ pub fn import_json(data: &[u8], actions: &[String]) -> Result<Vec<Mapping>> {
     }
     validate(&maps, actions)?;
     Ok(maps)
+}
+
+/// A named user-provided mapping; no guessed hardware assignments.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ControllerProfile {
+    pub source: String,
+    pub schema: String,
+    pub authors: String,
+    pub port: String,
+    pub skipped: usize,
+    pub unsupported: Vec<String>,
+    pub manufacturer: String,
+    pub model: String,
+    pub name: String,
+    pub mappings: Vec<Mapping>,
+}
+impl ControllerProfile {
+    pub fn import(data: &[u8], filename: &str, actions: &[String]) -> Result<Self> {
+        if data.len() > 2 * 1024 * 1024 {
+            bail!("Mapping file exceeds 2 MiB");
+        }
+        if data.iter().copied().find(|b| !b.is_ascii_whitespace()) == Some(b'<') {
+            return crate::controller_import::import_xml(
+                std::str::from_utf8(data)?,
+                filename,
+                actions,
+            );
+        }
+        let value: serde_json::Value = serde_json::from_slice(data)?;
+        if value.get("format").and_then(|v| v.as_str()) == Some("opendj-mapping") {
+            return crate::controller_import::import_opendj(&value, filename, actions);
+        }
+        if value.get("mappings").is_some() {
+            let mut profile: Self = serde_json::from_value(value)?;
+            validate(&profile.mappings, actions)?;
+            if profile.name.is_empty() {
+                profile.name = filename.chars().take(100).collect();
+            }
+            return Ok(profile);
+        }
+        let mappings = import_json(data, actions)?;
+        let text = |key: &str| {
+            value
+                .get(key)
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take(100)
+                .collect::<String>()
+        };
+        let mut name = text("name");
+        if name.is_empty() {
+            name = filename.chars().take(100).collect();
+        }
+        Ok(Self {
+            manufacturer: text("manufacturer"),
+            model: text("model"),
+            name,
+            mappings,
+            ..Default::default()
+        })
+    }
+    pub fn label(&self) -> String {
+        let device = format!("{} {}", self.manufacturer, self.model)
+            .trim()
+            .to_string();
+        let name = if device.is_empty() || self.name.to_lowercase().contains(&device.to_lowercase())
+        {
+            self.name.clone()
+        } else if self.name.is_empty() {
+            device
+        } else {
+            format!("{device} · {}", self.name)
+        };
+        if self.schema.is_empty() {
+            name
+        } else {
+            format!("{name} · {} · {} MIDI", self.schema, self.mappings.len())
+        }
+    }
+}
+pub fn bundled_profiles() -> &'static [ControllerProfile] {
+    static PROFILES: std::sync::LazyLock<Vec<ControllerProfile>> = std::sync::LazyLock::new(|| {
+        serde_json::from_str(include_str!("../assets/controller-profiles.json"))
+            .expect("validated bundled controller data")
+    });
+    &PROFILES
+}
+pub fn actions() -> Vec<String> {
+    let mut out = [
+        "cross",
+        "master",
+        "phones",
+        "samplevolume",
+        "browse",
+        "record",
+    ]
+    .map(String::from)
+    .to_vec();
+    for i in 0..4 {
+        for name in [
+            "play",
+            "touch",
+            "loopin",
+            "loopout",
+            "loop1",
+            "loop2",
+            "loop4",
+            "loop8",
+            "loopdouble",
+            "loophalf",
+            "hotcue0",
+            "hotcue1",
+            "hotcue2",
+            "hotcue3",
+            "hotcue4",
+            "hotcue5",
+            "hotcue6",
+            "hotcue7",
+            "hotclear0",
+            "hotclear1",
+            "hotclear2",
+            "hotclear3",
+            "hotclear4",
+            "hotclear5",
+            "hotclear6",
+            "hotclear7",
+            "cue",
+            "setcue",
+            "sync",
+            "scratch",
+            "pfl",
+            "loopoff",
+            "load",
+            "pitch",
+            "gain",
+            "jog",
+            "hot",
+            "auto",
+            "manual",
+            "sample",
+            "pad0",
+            "pad1",
+            "pad2",
+            "pad3",
+            "pad4",
+            "pad5",
+            "pad6",
+            "pad7",
+            "chorus_mix",
+            "chorus_rate",
+            "chorus_on",
+            "tremolo_depth",
+            "tremolo_rate",
+            "tremolo_on",
+            "drive",
+            "distortion_mix",
+            "distortion_on",
+            "crusher_mix",
+            "crusher_bits",
+            "crusher_on",
+            "eq0",
+            "eq1",
+            "eq2",
+            "fx_bypass",
+            "filter",
+            "filter_on",
+            "echo_on",
+            "echo_mix",
+            "echo_feedback",
+            "echo_time",
+            "echo_sync",
+            "reverb_on",
+            "reverb_mix",
+            "reverb_room",
+            "reverb_damping",
+            "flanger_on",
+            "flanger_mix",
+            "flanger_rate",
+            "flanger_depth",
+        ] {
+            out.push(format!("{i}.{name}"));
+        }
+    }
+    out
+}
+
+impl Mapping {
+    /// Map a 7-bit control to a normalized value, including inverted/relative controls.
+    pub fn normalized(&self, value: u8, current: f32) -> f32 {
+        if self.relative {
+            let delta = relative(value, self.encoding) as f32 * 0.01;
+            (current + if self.inverted { -delta } else { delta }).clamp(0., 1.)
+        } else {
+            let v = value.min(127) as f32 / 127.;
+            if self.inverted {
+                1. - v
+            } else {
+                v
+            }
+        }
+    }
 }

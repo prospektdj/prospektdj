@@ -4,3 +4,6 @@
 *.tmp
 
 /release-dist/
+
+/release-tools/
+/squashfs-root/

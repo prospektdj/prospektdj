@@ -37,7 +37,7 @@ pub struct DeckView {
     pub rate: f64,
     pub bpm: f64,
     pub cue: f64,
-    pub hot: [Option<f64>; 4],
+    pub hot: [Option<f64>; 8],
     pub loop_range: Option<(f64, f64)>,
     pub volume: f32,
     pub eq: [f32; 3],
@@ -56,7 +56,7 @@ impl Default for DeckView {
             rate: 1.,
             bpm: 120.,
             cue: 0.,
-            hot: [None; 4],
+            hot: [None; 8],
             loop_range: None,
             volume: 0.8,
             eq: [0.; 3],
@@ -68,7 +68,8 @@ impl Default for DeckView {
 }
 #[derive(Clone, Debug)]
 pub struct Snapshot {
-    pub decks: [DeckView; 2],
+    pub deck_count: usize,
+    pub decks: [DeckView; 4],
     pub cross: f32,
     pub master: f32,
     pub phones: f32,
@@ -81,6 +82,7 @@ pub struct Snapshot {
 impl Default for Snapshot {
     fn default() -> Self {
         Self {
+            deck_count: 2,
             decks: std::array::from_fn(|_| DeckView::default()),
             cross: 0.5,
             master: 0.75,
@@ -111,6 +113,7 @@ pub enum DeckControl {
     Eq(usize, f32),
     Loop(f64),
     LoopOff,
+    LoopScale(f64),
     PadMode(PadMode),
     Pad(usize, bool),
     Pfl,
@@ -119,6 +122,7 @@ pub enum DeckControl {
     Bend(f64),
 }
 pub enum Command {
+    DeckCount(usize),
     Deck(usize, DeckControl),
     Cross(f32),
     Master(f32),
@@ -182,7 +186,8 @@ struct Fade {
     linear: bool,
 }
 pub struct Engine {
-    decks: [Deck; 2],
+    deck_count: usize,
+    decks: [Deck; 4],
     pub sample_rate: u32,
     pub cross: f32,
     pub master: f32,
@@ -200,6 +205,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(sample_rate: u32) -> Self {
         Self {
+            deck_count: 2,
             decks: std::array::from_fn(|_| Deck::new(sample_rate)),
             sample_rate,
             cross: 0.5,
@@ -218,7 +224,18 @@ impl Engine {
     }
     pub fn apply(&mut self, command: Command) {
         match command {
-            Command::Deck(i, control) if i < 2 => self.deck_control(i, control),
+            Command::DeckCount(count) => {
+                self.deck_count = if count == 4 { 4 } else { 2 };
+                for d in self.decks.iter_mut().skip(self.deck_count) {
+                    d.view.playing = false;
+                    d.jog = None;
+                    d.bend = 0.;
+                    d.amp = 0.;
+                    d.smooth_gain = 0.;
+                    d.effects.reset();
+                }
+            }
+            Command::Deck(i, control) if i < 4 => self.deck_control(i, control),
             Command::Cross(x) => self.cross = x.clamp(0., 1.),
             Command::Master(x) => self.master = x.clamp(0., 1.),
             Command::Phones(x) => self.phones = x.clamp(0., 1.),
@@ -272,11 +289,12 @@ impl Engine {
                 self.fade = None;
             }
             Command::Restore(s) => {
+                self.apply(Command::DeckCount(s.deck_count));
                 self.cross = s.cross;
                 self.master = s.master;
                 self.phones = s.phones;
                 self.sample_volume = s.sample_volume;
-                for i in 0..2 {
+                for i in 0..4 {
                     if let Some(track) = &s.decks[i].track {
                         self.deck_control(i, DeckControl::Load(track.clone()));
                         self.decks[i].frame = s.decks[i].position * track.sample_rate as f64;
@@ -392,6 +410,17 @@ impl Engine {
                 }
             }
             DeckControl::LoopOff => d.view.loop_range = None,
+            DeckControl::LoopScale(scale) => {
+                if let (Some((a, b)), Some(track)) = (d.view.loop_range, d.view.track.as_ref()) {
+                    let end = (a + (b - a) * scale.clamp(0.5, 2.)).min(track.duration());
+                    if end - a > 0.01 {
+                        d.view.loop_range = Some((a, end));
+                        if d.frame / track.sample_rate as f64 >= end {
+                            d.frame = a * track.sample_rate as f64;
+                        }
+                    }
+                }
+            }
             DeckControl::PadMode(mode) => d.view.mode = mode,
             DeckControl::Pfl => d.view.pfl = !d.view.pfl,
             DeckControl::ScratchMode => d.view.scratch = !d.view.scratch,
@@ -403,7 +432,10 @@ impl Engine {
                 }
             }
             DeckControl::Bend(v) => d.bend = v.clamp(-0.25, 0.25),
-            DeckControl::Pad(p, erase) if p < 4 => {
+            DeckControl::Pad(p, erase) if p < 8 => {
+                if d.view.mode != PadMode::HotCue && p >= 4 {
+                    return;
+                }
                 if d.view.mode == PadMode::Sampler {
                     if erase {
                         self.samples[p] = None;
@@ -488,7 +520,7 @@ impl Engine {
         let gains = cross_gains(self.cross, linear);
         let mut out = [0.; 2];
         let mut phones = [0.; 2];
-        for (i, d) in self.decks.iter_mut().enumerate() {
+        for (i, d) in self.decks.iter_mut().take(self.deck_count).enumerate() {
             let Some(track) = &d.view.track else {
                 continue;
             };
@@ -516,7 +548,7 @@ impl Engine {
             d.effects.configure(d.view.fx, d.view.bpm * d.view.rate);
             frame = d.effects.process(frame);
             d.view.level = (d.view.level * 0.9995).max(frame[0].abs().max(frame[1].abs()).min(1.));
-            d.smooth_gain += (d.view.volume * gains[i] - d.smooth_gain) * 0.002;
+            d.smooth_gain += (d.view.volume * gains[i % 2] - d.smooth_gain) * 0.002;
             for c in 0..2 {
                 out[c] += frame[c] * d.smooth_gain;
                 if d.view.pfl {
@@ -594,6 +626,7 @@ impl Engine {
     }
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
+            deck_count: self.deck_count,
             decks: std::array::from_fn(|i| self.decks[i].view.clone()),
             cross: self.cross,
             master: self.master,

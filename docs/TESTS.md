@@ -1,4 +1,6 @@
-# Weryfikacja Rust Edition 2.1
+# Weryfikacja Rust Edition 2.2 BETA
+
+Aktualne kontrole 2.2 BETA: 39 testów automatycznych, cargo fmt i clippy. Szczegóły nowych testów są w sekcji Weryfikacja 2.2 BETA na końcu. Poniższe wcześniejsze sekcje zachowują historię testów wersji 2.0/2.1 BETA.
 
 Testowane środowisko: Linux x86_64, Rust 1.100.0, natywne okno egui/eframe na Xvfb. Niezależny projekt Rust, bez uruchamiania Electrona lub przeglądarki.
 
@@ -41,3 +43,11 @@ Paczka Linux z tego środowiska wymaga glibc 2.39+. Workflow buduje na Ubuntu 22
 Łącznie 25 testów: 13 rdzenia, 7 efektów, 4 biblioteki i 1 CPAL. Testy efektów sprawdzają bypass, czas echa, synchronizację BPM, wybrzmiewanie, stabilność parametrów oraz routing silnika. Testy katalogu obejmują wyszukiwanie, sortowanie, skrzynki, deduplikację, brakujące pliki i ponowny zapis bazy. Sprawdzono także pasma cache fali RGB.
 
 W natywnym oknie sprawdzono zakładki DJ-FX / Samples / Mixer, przechwycenie czterech sampli, zmianę parametrów efektów, reset pokręteł, wyszukiwanie i sortowanie. Obejrzano zrzuty w rozdzielczościach 1540×1040 i 1000×760. Fizyczne urządzenia audio/MIDI oraz uruchomienie na Windows nadal wymagają sprawdzenia na docelowym komputerze.
+
+## Weryfikacja 2.2 BETA
+
+39 testów automatycznych: 13 rdzenia, 7 dotychczasowych efektów, 4 biblioteki, 1 CPAL (ALSA null), 8 nowych funkcji 2.2 i 6 importu/katalogu kontrolerów. Sprawdzono cztery niezależne decki, 8 hot cue na każdy deck, przywracanie czterech kanałów, ciszę kanałów C/D po przejściu do trybu dwóch decków (także ogony efektów), nowe efekty i dokładny bypass.
+
+Kontrole katalogu obejmują 334 profile i poprawność wszystkich przypisań, wewnętrzne stałe XML, odrzucanie zewnętrznych encji, pomijanie skryptów i HID, konflikty warstw oraz względne i odwrócone kontrolki. Katalog wbudowany nie jest duplikowany w zapisywanych ustawieniach. Testy nie potwierdzają fizycznej współpracy z każdym kontrolerem; zakres częściowej konwersji jest widoczny w ustawieniach.
+
+Font Helvetica Neue nie jest redystrybuowany. Interfejs używa wybranego lokalnego pliku fontu lub dołączonego, otwartego DejaVu Sans Bold.

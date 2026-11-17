@@ -1,6 +1,6 @@
-# Biblioteki i licencje
+# BETA — biblioteki i licencje
 
-Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i obejmuje również zależności narzędziowe oraz cele platformowe, które nie muszą być włączone w danej paczce. Teksty licencji dołączono w licenses/dependencies. FFmpeg nie jest dołączony do paczki i pozostaje oddzielnym, opcjonalnym narzędziem.
+Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled.
 
 | Biblioteka | Wersja | Licencja | Źródła |
 |---|---|---|---|
@@ -15,6 +15,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | android-properties | 0.2.2 | MIT | https://crates.io/crates/android-properties/0.2.2 |
 | android_system_properties | 0.1.6 | MIT OR Apache-2.0 | https://crates.io/crates/android_system_properties/0.1.6 |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 | https://crates.io/crates/anyhow/1.0.104 |
+| arabic_reshaper | 0.4.2 | MIT | https://crates.io/crates/arabic_reshaper/0.4.2 |
 | arboard | 3.7.0 | MIT OR Apache-2.0 | https://crates.io/crates/arboard/3.7.0 |
 | arrayvec | 0.7.8 | MIT OR Apache-2.0 | https://crates.io/crates/arrayvec/0.7.8 |
 | as-raw-xcb-connection | 1.0.1 | MIT OR Apache-2.0 | https://crates.io/crates/as-raw-xcb-connection/1.0.1 |
@@ -58,13 +59,14 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | https://crates.io/crates/cfg-if/1.0.5 |
 | cfg_aliases | 0.2.2 | MIT | https://crates.io/crates/cfg_aliases/0.2.2 |
 | cgl | 0.3.2 | MIT / Apache-2.0 | https://crates.io/crates/cgl/0.3.2 |
+| chrono | 0.4.45 | MIT OR Apache-2.0 | https://crates.io/crates/chrono/0.4.45 |
 | clang-sys | 1.9.1 | Apache-2.0 | https://crates.io/crates/clang-sys/1.9.1 |
 | clipboard-win | 5.4.3 | BSL-1.0 | https://crates.io/crates/clipboard-win/5.4.3 |
 | codespan-reporting | 0.11.1 | Apache-2.0 | https://crates.io/crates/codespan-reporting/0.11.1 |
 | combine | 4.6.9 | MIT | https://crates.io/crates/combine/4.6.9 |
 | concurrent-queue | 2.5.0 | Apache-2.0 OR MIT | https://crates.io/crates/concurrent-queue/2.5.0 |
-| core-foundation | 0.9.4 | MIT OR Apache-2.0 | https://crates.io/crates/core-foundation/0.9.4 |
 | core-foundation | 0.10.1 | MIT OR Apache-2.0 | https://crates.io/crates/core-foundation/0.10.1 |
+| core-foundation | 0.9.4 | MIT OR Apache-2.0 | https://crates.io/crates/core-foundation/0.9.4 |
 | core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | https://crates.io/crates/core-foundation-sys/0.8.7 |
 | core-graphics | 0.23.2 | MIT OR Apache-2.0 | https://crates.io/crates/core-graphics/0.23.2 |
 | core-graphics-types | 0.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/core-graphics-types/0.1.3 |
@@ -150,6 +152,8 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | hex | 0.4.3 | MIT OR Apache-2.0 | https://crates.io/crates/hex/0.4.3 |
 | hexf-parse | 0.2.1 | CC0-1.0 | https://crates.io/crates/hexf-parse/0.2.1 |
 | hound | 3.5.1 | Apache-2.0 | https://crates.io/crates/hound/3.5.1 |
+| iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | https://crates.io/crates/iana-time-zone/0.1.65 |
+| iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | https://crates.io/crates/iana-time-zone-haiku/0.1.2 |
 | icu_collections | 2.4.0 | Unicode-3.0 | https://crates.io/crates/icu_collections/2.4.0 |
 | icu_locale_core | 2.4.0 | Unicode-3.0 | https://crates.io/crates/icu_locale_core/2.4.0 |
 | icu_normalizer | 2.4.0 | Unicode-3.0 | https://crates.io/crates/icu_normalizer/2.4.0 |
@@ -178,8 +182,8 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | libc | 0.2.191 | MIT OR Apache-2.0 | https://crates.io/crates/libc/0.2.191 |
 | libloading | 0.8.9 | ISC | https://crates.io/crates/libloading/0.8.9 |
 | libredox | 0.1.25 | MIT | https://crates.io/crates/libredox/0.1.25 |
-| linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/linux-raw-sys/0.4.15 |
 | linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/linux-raw-sys/0.12.1 |
+| linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/linux-raw-sys/0.4.15 |
 | litemap | 0.8.3 | Unicode-3.0 | https://crates.io/crates/litemap/0.8.3 |
 | litrs | 1.0.1 | MIT OR Apache-2.0 | https://crates.io/crates/litrs/1.0.1 |
 | lock_api | 0.4.14 | MIT OR Apache-2.0 | https://crates.io/crates/lock_api/0.4.14 |
@@ -206,6 +210,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | ndk-sys | 0.6.0+11769913 | MIT OR Apache-2.0 | https://crates.io/crates/ndk-sys/0.6.0+11769913 |
 | nohash-hasher | 0.2.0 | Apache-2.0 OR MIT | https://crates.io/crates/nohash-hasher/0.2.0 |
 | nom | 7.1.3 | MIT | https://crates.io/crates/nom/7.1.3 |
+| ntapi | 0.4.3 | Apache-2.0 OR MIT | https://crates.io/crates/ntapi/0.4.3 |
 | num-derive | 0.4.2 | MIT OR Apache-2.0 | https://crates.io/crates/num-derive/0.4.2 |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | https://crates.io/crates/num-traits/0.2.19 |
 | num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://crates.io/crates/num_enum/0.7.6 |
@@ -226,6 +231,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | objc2-encode | 4.1.0 | MIT | https://crates.io/crates/objc2-encode/4.1.0 |
 | objc2-foundation | 0.2.2 | MIT | https://crates.io/crates/objc2-foundation/0.2.2 |
 | objc2-foundation | 0.3.2 | MIT | https://crates.io/crates/objc2-foundation/0.3.2 |
+| objc2-io-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/objc2-io-kit/0.3.2 |
 | objc2-io-surface | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/objc2-io-surface/0.3.2 |
 | objc2-link-presentation | 0.2.2 | MIT | https://crates.io/crates/objc2-link-presentation/0.2.2 |
 | objc2-metal | 0.2.2 | MIT | https://crates.io/crates/objc2-metal/0.2.2 |
@@ -281,6 +287,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | https://crates.io/crates/regex-syntax/0.8.11 |
 | renderdoc-sys | 1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/renderdoc-sys/1.1.0 |
 | rfd | 0.15.4 | MIT | https://crates.io/crates/rfd/0.15.4 |
+| roxmltree | 0.20.0 | MIT OR Apache-2.0 | https://crates.io/crates/roxmltree/0.20.0 |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT | https://crates.io/crates/rustc-hash/1.1.0 |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | https://crates.io/crates/rustc-hash/2.1.3 |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | https://crates.io/crates/rustc_version/0.4.1 |
@@ -296,6 +303,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 | https://crates.io/crates/serde_derive/1.0.229 |
 | serde_json | 1.0.154 | MIT OR Apache-2.0 | https://crates.io/crates/serde_json/1.0.154 |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 | https://crates.io/crates/serde_repr/0.1.21 |
+| serde_spanned | 1.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/serde_spanned/1.1.3 |
 | shlex | 1.3.0 | MIT OR Apache-2.0 | https://crates.io/crates/shlex/1.3.0 |
 | shlex | 2.0.1 | MIT OR Apache-2.0 | https://crates.io/crates/shlex/2.0.1 |
 | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | https://crates.io/crates/signal-hook-registry/1.4.8 |
@@ -332,6 +340,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | syn | 2.0.119 | MIT OR Apache-2.0 | https://crates.io/crates/syn/2.0.119 |
 | syn | 3.0.10 | MIT OR Apache-2.0 | https://crates.io/crates/syn/3.0.10 |
 | synstructure | 0.14.0 | MIT | https://crates.io/crates/synstructure/0.14.0 |
+| sysinfo | 0.37.2 | MIT | https://crates.io/crates/sysinfo/0.37.2 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | https://crates.io/crates/tempfile/3.27.0 |
 | termcolor | 1.4.1 | Unlicense OR MIT | https://crates.io/crates/termcolor/1.4.1 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 | https://crates.io/crates/thiserror/1.0.69 |
@@ -341,15 +350,18 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | tiff | 0.11.3 | MIT | https://crates.io/crates/tiff/0.11.3 |
 | tinystr | 0.8.5 | Unicode-3.0 | https://crates.io/crates/tinystr/0.8.5 |
 | tokio | 1.54.1 | MIT | https://crates.io/crates/tokio/1.54.1 |
+| toml | 1.2.1+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml/1.2.1+spec-1.1.0 |
 | toml_datetime | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_datetime/1.1.3+spec-1.1.0 |
 | toml_edit | 0.25.19+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_edit/0.25.19+spec-1.1.0 |
 | toml_parser | 1.1.5+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_parser/1.1.5+spec-1.1.0 |
+| toml_writer | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_writer/1.2.0+spec-1.1.0 |
 | tracing | 0.1.44 | MIT | https://crates.io/crates/tracing/0.1.44 |
 | tracing-attributes | 0.1.31 | MIT | https://crates.io/crates/tracing-attributes/0.1.31 |
 | tracing-core | 0.1.36 | MIT | https://crates.io/crates/tracing-core/0.1.36 |
 | ttf-parser | 0.25.1 | MIT OR Apache-2.0 | https://crates.io/crates/ttf-parser/0.25.1 |
 | type-map | 0.5.1 | MIT/Apache-2.0 | https://crates.io/crates/type-map/0.5.1 |
 | uds_windows | 1.2.1 | MIT | https://crates.io/crates/uds_windows/1.2.1 |
+| unicode-bidi | 0.3.18 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-bidi/0.3.18 |
 | unicode-ident | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 | https://crates.io/crates/unicode-ident/1.0.27 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-segmentation/1.13.3 |
 | unicode-width | 0.1.14 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-width/0.1.14 |
@@ -392,23 +404,34 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | windows | 0.54.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.54.0 |
 | windows | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.56.0 |
 | windows | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.58.0 |
+| windows | 0.61.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.61.3 |
+| windows-collections | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-collections/0.2.0 |
 | windows-core | 0.54.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.54.0 |
 | windows-core | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.56.0 |
 | windows-core | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.58.0 |
+| windows-core | 0.61.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.61.2 |
+| windows-future | 0.2.1 | MIT OR Apache-2.0 | https://crates.io/crates/windows-future/0.2.1 |
 | windows-implement | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.56.0 |
 | windows-implement | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.58.0 |
+| windows-implement | 0.60.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.60.2 |
 | windows-interface | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.56.0 |
 | windows-interface | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.58.0 |
+| windows-interface | 0.59.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.59.3 |
+| windows-link | 0.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows-link/0.1.3 |
 | windows-link | 0.2.1 | MIT OR Apache-2.0 | https://crates.io/crates/windows-link/0.2.1 |
+| windows-numerics | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-numerics/0.2.0 |
 | windows-result | 0.1.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.1.2 |
 | windows-result | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.2.0 |
+| windows-result | 0.3.4 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.3.4 |
 | windows-strings | 0.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-strings/0.1.0 |
+| windows-strings | 0.4.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-strings/0.4.2 |
 | windows-sys | 0.45.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-sys/0.45.0 |
 | windows-sys | 0.52.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-sys/0.52.0 |
 | windows-sys | 0.59.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-sys/0.59.0 |
 | windows-sys | 0.61.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-sys/0.61.2 |
 | windows-targets | 0.42.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-targets/0.42.2 |
 | windows-targets | 0.52.6 | MIT OR Apache-2.0 | https://crates.io/crates/windows-targets/0.52.6 |
+| windows-threading | 0.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-threading/0.1.0 |
 | windows_aarch64_gnullvm | 0.42.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows_aarch64_gnullvm/0.42.2 |
 | windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | https://crates.io/crates/windows_aarch64_gnullvm/0.52.6 |
 | windows_aarch64_msvc | 0.42.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows_aarch64_msvc/0.42.2 |
@@ -426,6 +449,7 @@ Własny kod jest na GPL-3.0-or-later. Poniższa lista pochodzi z Cargo.lock i ob
 | windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | https://crates.io/crates/windows_x86_64_msvc/0.52.6 |
 | winit | 0.30.13 | Apache-2.0 | https://crates.io/crates/winit/0.30.13 |
 | winnow | 1.0.5 | MIT | https://crates.io/crates/winnow/1.0.5 |
+| winresource | 0.1.34 | MIT | https://crates.io/crates/winresource/0.1.34 |
 | wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/wit-bindgen/0.57.1 |
 | writeable | 0.6.4 | Unicode-3.0 | https://crates.io/crates/writeable/0.6.4 |
 | x11-dl | 2.21.0 | MIT | https://crates.io/crates/x11-dl/2.21.0 |

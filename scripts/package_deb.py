@@ -19,6 +19,7 @@ stage = out / 'deb-stage'
 if stage.exists():
     shutil.rmtree(stage)
 stage.mkdir()
+stage.chmod(0o755)
 
 def directory(relative):
     path = stage / relative
@@ -38,8 +39,8 @@ width, height = struct.unpack('>II', icon.read_bytes()[16:24])
 shutil.copy2(icon, directory(f'usr/share/icons/hicolor/{width}x{height}/apps') / 'prospekt-dj.png')
 (directory('usr/share/applications') / 'prospekt-dj.desktop').write_text('''[Desktop Entry]
 Type=Application
-Name=Prospekt DJ
-Comment=Native DJ studio
+Name=Prospekt DJ BETA
+Comment=Open source DJ studio — BETA
 Exec=prospekt-dj
 Icon=prospekt-dj
 Terminal=false
@@ -48,7 +49,7 @@ StartupNotify=true
 ''')
 size = sum(p.stat().st_size for p in stage.rglob('*') if p.is_file())
 (directory('DEBIAN') / 'control').write_text(f'''Package: prospekt-dj
-Version: {version}
+Version: {version.replace("-", "~", 1)}
 Section: sound
 Priority: optional
 Architecture: amd64
@@ -57,7 +58,7 @@ Installed-Size: {(size + 1023) // 1024}
 Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libx11-6, libxkbcommon0, libgl1, xdg-utils, xdg-desktop-portal
 Recommends: ffmpeg
 Homepage: https://github.com/prospektdj/prospektdj
-Description: Native open source DJ studio written in Rust
+Description: BETA open source DJ studio written in Rust
  Two decks, RGB waveforms, effects, sampler, music library,
  MIDI mapping, automix and mix recording.
 ''')

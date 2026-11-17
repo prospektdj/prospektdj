@@ -99,7 +99,7 @@ impl Widget for Knob<'_> {
             center,
             radius,
             if ui.visuals().dark_mode {
-                Color32::from_gray(28)
+                Color32::BLACK
             } else {
                 Color32::from_gray(224)
             },
@@ -170,7 +170,7 @@ impl Widget for Knob<'_> {
 pub fn meter(ui: &mut Ui, level: f32, color: Color32, height: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(11., height), Sense::hover());
     let p = ui.painter();
-    p.rect_filled(rect, 1., Color32::from_gray(8));
+    p.rect_filled(rect, 1., Color32::BLACK);
     for i in 0..18 {
         let on = level > i as f32 / 18.;
         let y = rect.bottom() - 3. - i as f32 * (height - 5.) / 18.;

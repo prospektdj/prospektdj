@@ -1,5 +1,6 @@
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use egui::{Align, Color32, FontId, RichText, Sense, Stroke, Vec2};
+use prospekt_dj::i18n::{self, tr};
 use prospekt_dj::{
     audio::{self, AudioRuntime},
     engine::{self, Command, DeckControl, DeckView, PadMode, Snapshot},
@@ -21,9 +22,11 @@ use prospekt_dj::{
     library::{Catalog, Entry, Query, Scope, Sort},
 };
 
-const ACCENTS: [Color32; 2] = [
+const ACCENTS: [Color32; 4] = [
     Color32::from_rgb(49, 188, 255),
     Color32::from_rgb(66, 196, 227),
+    Color32::from_rgb(209, 118, 255),
+    Color32::from_rgb(244, 164, 69),
 ];
 type LoadAuto = Option<(u64, usize, bool)>;
 enum Work {
@@ -93,11 +96,11 @@ pub struct Studio {
     dock_tab: usize,
     zoom: f64,
     status: String,
-    deck_tokens: [u64; 2],
+    deck_tokens: [u64; 4],
     sample_tokens: [u64; 4],
-    loading: [bool; 2],
-    covers: [Option<egui::TextureHandle>; 2],
-    taps: [Vec<Instant>; 2],
+    loading: [bool; 4],
+    covers: [Option<egui::TextureHandle>; 4],
+    taps: [Vec<Instant>; 4],
     auto: Option<AutoMix>,
     generation: u64,
     record_result: Option<Receiver<Result<PathBuf, String>>>,
@@ -115,16 +118,42 @@ pub struct Studio {
     encoding: Encoding,
     last_midi: String,
     outputs: Vec<String>,
-    bend: [f64; 2],
+    bend: [f64; 4],
     allow_close: bool,
     had_focus: bool,
     close_confirm: bool,
     close_after_record: bool,
     last_save: Instant,
+    monitor: prospekt_dj::telemetry::Monitor,
+    font_name: String,
+    brand: crate::brand::Brand,
+    license_search: String,
+    license_selected: usize,
+    profile_manufacturer: String,
+    profile_model: String,
+    profile_name: String,
+    controller_search: String,
 }
 impl Studio {
-    pub fn new(cc: &eframe::CreationContext<'_>, settings: Settings) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, mut settings: Settings) -> Self {
+        for profile in midi::bundled_profiles() {
+            if !settings
+                .controller_profiles
+                .iter()
+                .any(|p| p.source == profile.source)
+            {
+                settings.controller_profiles.push(profile.clone());
+            }
+        }
+        if !settings.controller_profile_source.is_empty() {
+            settings.controller_profile = settings
+                .controller_profiles
+                .iter()
+                .position(|p| p.source == settings.controller_profile_source);
+        }
         console_theme(&cc.egui_ctx, settings.light);
+        i18n::set_language(&settings.language);
+        let font_name = crate::fonts::install(&cc.egui_ctx, settings.logo_font.as_deref());
         let mut style = (*cc.egui_ctx.style()).clone();
         style.spacing.item_spacing = Vec2::new(6., 4.);
         style.spacing.slider_rail_height = 2.;
@@ -199,14 +228,14 @@ impl Studio {
             selected: 0,
             focused: 0,
             settings_open: false,
-            settings_tab: 0,
+            settings_tab: 4,
             library_focus: false,
             dock_tab,
             zoom: 8.,
-            status: "Gotowy · Rust Edition · pliki pozostają na komputerze".into(),
-            deck_tokens: [0; 2],
+            status: "Gotowy · BETA · Rust Edition · pliki pozostają na komputerze".into(),
+            deck_tokens: [0; 4],
             sample_tokens: [0; 4],
-            loading: [false; 2],
+            loading: [false; 4],
             covers: std::array::from_fn(|_| None),
             taps: std::array::from_fn(|_| Vec::new()),
             auto: None,
@@ -226,16 +255,26 @@ impl Studio {
             encoding: Encoding::default(),
             last_midi: String::new(),
             outputs: Vec::new(),
-            bend: [0.; 2],
+            bend: [0.; 4],
             allow_close: false,
             had_focus: true,
             close_confirm: false,
             close_after_record: false,
             last_save: Instant::now(),
+            monitor: prospekt_dj::telemetry::Monitor::new(settings::config_path()),
+            font_name,
+            brand: crate::brand::Brand::load(&cc.egui_ctx),
+            license_search: String::new(),
+            license_selected: 0,
+            profile_manufacturer: String::new(),
+            profile_model: String::new(),
+            profile_name: String::new(),
+            controller_search: String::new(),
         };
-        for i in 0..2 {
+        for i in 0..4 {
             studio.snapshot.decks[i].fx = studio.settings.effects[i];
         }
+        studio.snapshot.deck_count = studio.settings.deck_count;
         studio.restart_audio();
         let mut initial_paths = studio.library.clone();
         initial_paths.extend(studio.catalog.roots.iter().cloned());
@@ -286,7 +325,7 @@ impl Studio {
             return;
         }
         self.stop_auto();
-        self.settings.effects = std::array::from_fn(|i| self.snapshot.decks[i].fx);
+        self.settings.effects = self.snapshot.decks.iter().map(|d| d.fx).collect();
         self.runtime = None;
         if let Some((stop, thread)) = self.offline.take() {
             let _ = stop.send(());
@@ -323,7 +362,7 @@ impl Studio {
             deck.playing = false;
         }
         self.send(Command::Restore(Box::new(previous)));
-        for i in 0..2 {
+        for i in 0..4 {
             self.send(Command::Deck(i, DeckControl::Fx(self.settings.effects[i])));
         }
     }
@@ -400,7 +439,7 @@ impl Studio {
     }
     fn demo(&mut self) {
         self.stop_auto();
-        for i in 0..2 {
+        for i in 0..self.settings.deck_count {
             self.deck_tokens[i] += 1;
             self.loading[i] = false;
             self.covers[i] = None;
@@ -447,7 +486,7 @@ impl Studio {
     }
     fn poll(&mut self, ctx: &egui::Context) {
         if let Ok(view) = self.shared.try_lock() {
-            for i in 0..2 {
+            for i in 0..4 {
                 if view.decks[i].track.as_ref().and_then(|t| t.path.as_ref())
                     != self.snapshot.decks[i]
                         .track
@@ -560,7 +599,7 @@ impl Studio {
                     match result {
                         Ok(track) => {
                             self.send(Command::SampleLoad(slot, track));
-                            for i in 0..2 {
+                            for i in 0..4 {
                                 self.send(Command::Deck(i, DeckControl::PadMode(PadMode::Sampler)));
                             }
                             self.dock_tab = 1;
@@ -813,7 +852,7 @@ impl Studio {
     fn persist(&mut self) {
         self.settings.dock_tab = self.dock_tab;
         self.settings.library = self.library.clone();
-        self.settings.effects = std::array::from_fn(|i| self.snapshot.decks[i].fx);
+        self.settings.effects = self.snapshot.decks.iter().map(|d| d.fx).collect();
         if let Err(error) = settings::save(&self.settings) {
             self.status = format!("Ustawienia: {error}");
         }
@@ -845,106 +884,131 @@ impl Studio {
         }
     }
     fn sync(&mut self, i: usize) {
-        let other = &self.snapshot.decks[1 - i];
+        let other = &self.snapshot.decks[i ^ 1];
         let rate = other.bpm * other.rate / self.snapshot.decks[i].bpm;
         self.deck(i, DeckControl::Rate(rate));
         self.status = "Dopasowano tempo. SYNC nie wyrównuje fazy bitów.".into();
     }
     fn top(&mut self, ctx: &egui::Context) {
+        self.monitor.poll();
         egui::TopBottomPanel::top("header")
             .frame(
                 egui::Frame::new()
                     .fill(if self.settings.light {
-                        Color32::from_gray(222)
+                        Color32::WHITE
                     } else {
-                        Color32::from_gray(17)
+                        Color32::BLACK
                     })
-                    .inner_margin(egui::Margin::symmetric(8, 4)),
+                    .inner_margin(8),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("PROSPEKT").size(18.).strong());
-                    ui.label(RichText::new("DJ").size(18.).color(ACCENTS[0]).strong());
-                    ui.label(RichText::new("RUST 2.1").small().weak());
-                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        if ui.button("SETUP").clicked() {
-                            self.settings_open = true;
-                            self.outputs = audio::output_names();
-                            self.midi_names = midi::inputs();
-                        }
-                        if ui
-                            .button(if self.settings.light {
-                                "CIEMNY"
-                            } else {
-                                "JASNY"
-                            })
-                            .clicked()
-                        {
-                            self.settings.light = !self.settings.light;
-                            console_theme(ctx, self.settings.light);
-                        }
-                        if ui.button("F11").clicked() {
-                            toggle_fullscreen(ctx);
-                        }
-                        ui.toggle_value(&mut self.library_focus, "BIBLIOTEKA");
-                        let label = if self.runtime.is_some() {
-                            "AUDIO ON"
-                        } else {
-                            "AUDIO OFF"
-                        };
-                        if ui
-                            .small_button(RichText::new(label).color(if self.runtime.is_some() {
-                                Color32::from_rgb(81, 186, 116)
-                            } else {
-                                Color32::from_rgb(204, 150, 80)
-                            }))
-                            .on_hover_text("Wybierz wyjście audio w ustawieniach")
-                            .clicked()
-                        {
-                            self.settings_open = true;
-                            self.settings_tab = 0;
-                            self.outputs = audio::output_names();
-                        }
-                        if self.record_result.is_some() {
+                let rect = ui.available_rect_before_wrap();
+                ui.allocate_ui_with_layout(
+                    Vec2::new(rect.width(), 56.),
+                    egui::Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.vertical(|ui| {
                             ui.label(
-                                RichText::new(if self.record_stopping {
-                                    "ZAPIS…".into()
-                                } else {
-                                    format!("REC {}", time(self.snapshot.recorded_seconds))
-                                })
-                                .color(Color32::LIGHT_RED)
-                                .small(),
+                                RichText::new(chrono::Local::now().format("%H:%M:%S").to_string())
+                                    .monospace()
+                                    .size(16.),
                             );
-                        }
-                    });
-                });
+                            ui.label(
+                                RichText::new(format!(
+                                    "CPU {:.0}%   DISK {:.0}% · {:.1} GiB free",
+                                    self.monitor.stats.cpu,
+                                    self.monitor.stats.disk_used,
+                                    self.monitor.stats.available as f64 / 1073741824.
+                                ))
+                                .size(9.),
+                            )
+                            .on_hover_text(format!(
+                                "{} · disk capacity used / free",
+                                self.monitor.stats.disk
+                            ));
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button(tr("Ustawienia")).clicked() {
+                                self.settings_open = true;
+                                self.outputs = audio::output_names();
+                                self.midi_names = midi::inputs();
+                            }
+                            if ui.button("F11").clicked() {
+                                toggle_fullscreen(ctx);
+                            }
+                            ui.toggle_value(&mut self.library_focus, tr("BIBLIOTEKA"));
+                            if ui
+                                .small_button(if self.runtime.is_some() {
+                                    "AUDIO ON"
+                                } else {
+                                    "AUDIO OFF"
+                                })
+                                .clicked()
+                            {
+                                self.settings_open = true;
+                                self.settings_tab = 0;
+                                self.outputs = audio::output_names();
+                            }
+                        });
+                    },
+                );
+                if self.settings.graphic_logo {
+                    let size = Vec2::new(37. * self.brand.aspect, 37.);
+                    let destination = egui::Rect::from_center_size(
+                        egui::pos2(rect.center().x, rect.top() + 20.),
+                        size,
+                    );
+                    ui.painter().image(
+                        self.brand.texture.id(),
+                        destination,
+                        self.brand.uv,
+                        Color32::WHITE,
+                    );
+                } else {
+                    ui.painter().text(
+                        egui::pos2(rect.center().x, rect.top() + 20.),
+                        egui::Align2::CENTER_CENTER,
+                        "PROSPEKT DJ",
+                        FontId::new(24., egui::FontFamily::Name("logo".into())),
+                        ui.visuals().text_color(),
+                    );
+                }
+                ui.painter().text(
+                    egui::pos2(rect.center().x, rect.top() + 47.),
+                    egui::Align2::CENTER_CENTER,
+                    "OPEN SOURCE · 2.2 BETA",
+                    FontId::proportional(9.),
+                    Color32::from_rgb(255, 99, 135),
+                );
             });
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.add(egui::Label::new(RichText::new(&self.status).small()).truncate());
-            });
+            ui.add(egui::Label::new(RichText::new(tr(&self.status)).small()).truncate());
         });
     }
     fn decks_ui(&mut self, ui: &mut egui::Ui) {
         let middle = 148.;
         let width = ((ui.available_width() - middle - 12.) / 2.).max(300.);
-        ui.horizontal_top(|ui| {
-            ui.allocate_ui_with_layout(
-                Vec2::new(width, 0.),
-                egui::Layout::top_down(Align::Min),
-                |ui| self.deck_ui(ui, 0),
-            );
-            ui.allocate_ui_with_layout(
-                Vec2::new(middle, 0.),
-                egui::Layout::top_down(Align::Min),
-                |ui| self.mini_mixer(ui),
-            );
-            ui.allocate_ui_with_layout(
-                Vec2::new(width, 0.),
-                egui::Layout::top_down(Align::Min),
-                |ui| self.deck_ui(ui, 1),
-            );
-        });
+        for row in 0..self.settings.deck_count / 2 {
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    Vec2::new(width, 0.),
+                    egui::Layout::top_down(Align::Min),
+                    |ui| self.deck_ui(ui, row * 2),
+                );
+                ui.allocate_ui_with_layout(
+                    Vec2::new(middle, 0.),
+                    egui::Layout::top_down(Align::Center),
+                    |ui| {
+                        self.mini_mixer(ui, row * 2);
+                    },
+                );
+                ui.allocate_ui_with_layout(
+                    Vec2::new(width, 0.),
+                    egui::Layout::top_down(Align::Min),
+                    |ui| self.deck_ui(ui, row * 2 + 1),
+                );
+            });
+        }
         ui.add_space(3.);
         ui.horizontal(|ui| {
             ui.label(RichText::new("RGB WAVEFORMS").small().strong());
@@ -958,9 +1022,19 @@ impl Studio {
                 ui.add(egui::Slider::new(&mut self.zoom, 2.0..=16.).text("s"));
             });
         });
-        for (i, accent) in ACCENTS.iter().enumerate() {
+        for (i, accent) in ACCENTS.iter().take(self.settings.deck_count).enumerate() {
             let view = self.snapshot.decks[i].clone();
-            if let Some(pos) = waveform(ui, &view, *accent, 57., Some(self.zoom)) {
+            if let Some(pos) = waveform(
+                ui,
+                &view,
+                *accent,
+                if self.settings.deck_count == 4 {
+                    36.
+                } else {
+                    57.
+                },
+                Some(self.zoom),
+            ) {
                 self.deck(i, DeckControl::Seek(pos));
             }
         }
@@ -984,7 +1058,7 @@ impl Studio {
                 let show_platter = ui.ctx().screen_rect().width() >= 1200.;
                 let info = (ui.available_width() - if show_platter { 112. } else { 0. }).max(180.);
                 ui.horizontal_top(|ui| {
-                    if show_platter && i == 1 {
+                    if show_platter && i % 2 == 1 {
                         self.white_platter(ui, i, &d);
                     }
                     ui.allocate_ui_with_layout(
@@ -995,7 +1069,7 @@ impl Studio {
                             self.deck_info(ui, i, &d);
                         },
                     );
-                    if show_platter && i == 0 {
+                    if show_platter && i.is_multiple_of(2) {
                         self.white_platter(ui, i, &d);
                     }
                 });
@@ -1052,6 +1126,13 @@ impl Studio {
             }
             if self.loading[i] {
                 ui.spinner();
+            }
+            if ui
+                .selectable_label(self.focused == i, "●")
+                .on_hover_text("Keyboard focus · F1–F8: hot cue")
+                .clicked()
+            {
+                self.focused = i;
             }
             if let Some(pos) = waveform(ui, d, accent, 17., None) {
                 self.deck(i, DeckControl::Seek(pos));
@@ -1138,7 +1219,7 @@ impl Studio {
                     .fill(if d.playing {
                         Color32::from_rgb(99, 198, 126)
                     } else {
-                        Color32::from_gray(32)
+                        Color32::BLACK
                     }),
                 )
                 .clicked()
@@ -1193,7 +1274,7 @@ impl Studio {
             if mode != d.mode {
                 self.deck(i, DeckControl::PadMode(mode));
             }
-            for p in 0..4 {
+            for p in 0..if mode == PadMode::HotCue { 8 } else { 4 } {
                 let active = if mode == PadMode::HotCue {
                     d.hot[p].is_some()
                 } else if mode == PadMode::Sampler {
@@ -1206,7 +1287,7 @@ impl Studio {
                     Color32::from_rgb(179, 106, 42),
                     Color32::from_rgb(55, 105, 173),
                     Color32::from_rgb(175, 153, 48),
-                ][p];
+                ][p % 4];
                 let label = if mode == PadMode::ManualLoop {
                     ["IN", "OUT", "OFF", "RE"][p].into()
                 } else {
@@ -1294,13 +1375,21 @@ impl Studio {
             });
         });
     }
-    fn mini_mixer(&mut self, ui: &mut egui::Ui) {
+    fn mini_mixer(&mut self, ui: &mut egui::Ui, start: usize) {
         let s = self.snapshot.clone();
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new("MASTER / MONITOR").size(8.).weak());
+            ui.label(
+                RichText::new(if start == 0 {
+                    "MASTER / MONITOR"
+                } else {
+                    "CHANNEL C / D"
+                })
+                .size(8.)
+                .weak(),
+            );
             ui.horizontal(|ui| {
                 ui.add_space(((ui.available_width() - 80.) / 2.).max(0.));
-                for (i, accent) in ACCENTS.iter().enumerate() {
+                for (i, accent) in ACCENTS.iter().enumerate().skip(start).take(2) {
                     ui.vertical(|ui| {
                         ui.label(RichText::new(letter(i)).size(9.).color(*accent));
                         ui.horizontal(|ui| {
@@ -1321,6 +1410,10 @@ impl Studio {
                     });
                 }
             });
+            if start != 0 {
+                ui.label("A/C < X > B/D");
+                return;
+            }
             ui.horizontal(|ui| {
                 ui.add_space(((ui.available_width() - 66.) / 2.).max(0.));
                 let mut master = s.master;
@@ -1415,7 +1508,7 @@ impl Studio {
     }
     fn mixer_ui(&mut self, ui: &mut egui::Ui) {
         let s = self.snapshot.clone();
-        ui.columns(2, |columns| {
+        ui.columns(self.settings.deck_count, |columns| {
             for (i, column) in columns.iter_mut().enumerate() {
                 egui::Frame::group(column.style()).show(column, |ui| {
                     ui.label(
@@ -1498,7 +1591,7 @@ impl Studio {
     fn effects_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("FX RACK").strong());
-            for (i, accent) in ACCENTS.iter().enumerate() {
+            for (i, accent) in ACCENTS.iter().take(self.settings.deck_count).enumerate() {
                 ui.selectable_value(
                     &mut self.fx_deck,
                     i,
@@ -1542,7 +1635,7 @@ impl Studio {
                     .fill(if self.settings.light {
                         Color32::from_gray(232)
                     } else {
-                        Color32::from_rgb(23, 23, 23)
+                        Color32::BLACK
                     })
                     .inner_margin(6)
                     .corner_radius(3)
@@ -1685,6 +1778,65 @@ impl Studio {
                     });
             }
         });
+        ui.add_space(4.);
+        ui.columns(4, |columns| {
+            for (unit, column) in columns.iter_mut().enumerate() {
+                egui::Frame::group(column.style()).show(column, |ui| {
+                    let enabled = match unit {
+                        0 => &mut fx.chorus_enabled,
+                        1 => &mut fx.tremolo_enabled,
+                        2 => &mut fx.distortion_enabled,
+                        _ => &mut fx.crusher_enabled,
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            [
+                                "05  CHORUS",
+                                "06  TREMOLO",
+                                "07  DISTORTION",
+                                "08  BITCRUSHER",
+                            ][unit],
+                        );
+                        ui.toggle_value(enabled, if *enabled { "ON" } else { "OFF" });
+                    });
+                    ui.horizontal(|ui| {
+                        let (mix, amount, label, min, max) = match unit {
+                            0 => (&mut fx.chorus_mix, &mut fx.chorus_rate, "RATE Hz", 0.05, 5.),
+                            1 => (
+                                &mut fx.tremolo_depth,
+                                &mut fx.tremolo_rate,
+                                "RATE Hz",
+                                0.1,
+                                16.,
+                            ),
+                            2 => (&mut fx.distortion_mix, &mut fx.drive, "DRIVE", 1., 20.),
+                            _ => (&mut fx.crusher_mix, &mut fx.crusher_bits, "BITS", 4., 16.),
+                        };
+                        ui.add(
+                            Knob::new(mix, 0.0..=1.)
+                                .default(0.4)
+                                .label(if unit == 1 { "DEPTH" } else { "DRY / WET" })
+                                .unit("%")
+                                .color(accent)
+                                .size(32.),
+                        );
+                        ui.add(
+                            Knob::new(amount, min..=max)
+                                .default(if unit == 2 {
+                                    3.
+                                } else if unit == 3 {
+                                    10.
+                                } else {
+                                    0.6
+                                })
+                                .label(label)
+                                .color(accent)
+                                .size(32.),
+                        );
+                    });
+                });
+            }
+        });
         if fx != before {
             self.send(Command::Deck(i, DeckControl::Fx(fx)));
         }
@@ -1709,7 +1861,7 @@ impl Studio {
                                         sample
                                             .as_ref()
                                             .map(|(t, _, _)| t.title.as_str())
-                                            .unwrap_or("Pusty slot"),
+                                            .unwrap_or(&tr("Pusty slot")),
                                     )
                                     .size(11.)
                                     .strong(),
@@ -1818,29 +1970,29 @@ impl Studio {
     }
     fn library_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("KOLEKCJA").strong().size(13.));
+            ui.label(RichText::new(tr("KOLEKCJA")).strong().size(13.));
             if ui
                 .add(
                     egui::TextEdit::singleline(&mut self.search)
-                        .hint_text("Szukaj: tytuł, wykonawca, album, gatunek, tonacja…")
+                        .hint_text(tr("Szukaj: tytuł, wykonawca, album, gatunek, tonacja…"))
                         .desired_width((ui.available_width() - 390.).max(160.)),
                 )
                 .changed()
             {
                 self.browser_dirty = true;
             }
-            if ui.button("+ Pliki").clicked() {
+            if ui.button(tr("+ Pliki")).clicked() {
                 if let Some(files) = audio_dialog().pick_files() {
                     self.add_paths(files);
                 }
             }
-            if ui.button("+ Folder").clicked() {
+            if ui.button(tr("+ Folder")).clicked() {
                 if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                     self.add_paths(vec![folder]);
                 }
             }
             if ui
-                .add_enabled(self.index_jobs == 0, egui::Button::new("Odśwież tagi"))
+                .add_enabled(self.index_jobs == 0, egui::Button::new(tr("Odśwież tagi")))
                 .clicked()
             {
                 self.index_paths(self.library.clone(), true);
@@ -1874,10 +2026,10 @@ impl Studio {
     fn browser_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.set_max_width(172.);
         for (scope, label) in [
-            (Scope::All, "Wszystkie utwory"),
-            (Scope::Favorites, "Ulubione"),
-            (Scope::Loaded, "Na deckach"),
-            (Scope::Missing, "Brakujące pliki"),
+            (Scope::All, tr("Wszystkie utwory")),
+            (Scope::Favorites, tr("Ulubione")),
+            (Scope::Loaded, tr("Na deckach")),
+            (Scope::Missing, tr("Brakujące pliki")),
         ] {
             let count = match scope {
                 Scope::All => self.library.len(),
@@ -1900,7 +2052,7 @@ impl Studio {
             }
         }
         ui.add_space(10.);
-        ui.label(RichText::new("SKRZYNKI / CRATES").small().weak());
+        ui.label(RichText::new(tr("SKRZYNKI / CRATES")).small().weak());
         let crates = self.catalog.crates.clone();
         let mut remove = None;
         for c in crates {
@@ -1913,7 +2065,7 @@ impl Studio {
                 self.browser_dirty = true;
             }
             response.context_menu(|ui| {
-                if ui.button("Usuń skrzynkę").clicked() {
+                if ui.button(tr("Usuń skrzynkę")).clicked() {
                     remove = Some(c.id);
                     ui.close_menu();
                 }
@@ -1930,7 +2082,7 @@ impl Studio {
         ui.horizontal(|ui| {
             let input = ui.add(
                 egui::TextEdit::singleline(&mut self.new_crate)
-                    .hint_text("Nowa skrzynka")
+                    .hint_text(tr("Nowa skrzynka"))
                     .desired_width(123.),
             );
             let create = ui.small_button("+").clicked()
@@ -1967,8 +2119,18 @@ impl Studio {
         let artist = if width > 730. { 145. } else { 0. };
         let album = if width > 1100. { 115. } else { 0. };
         let size = if width > 950. { 68. } else { 0. };
-        let title =
-            (width - 30. - 34. - artist - album - 64. - 48. - 62. - size - 72. - 4.).max(130.);
+        let title = (width
+            - 30.
+            - 34.
+            - artist
+            - album
+            - 64.
+            - 48.
+            - 62.
+            - size
+            - (36. * self.settings.deck_count as f32)
+            - 4.)
+            .max(130.);
         let columns = [
             (30., "", None),
             (34., "#", None),
@@ -1979,7 +2141,7 @@ impl Studio {
             (48., "KEY", Some(Sort::Key)),
             (62., "CZAS", Some(Sort::Duration)),
             (size, "BITRATE", Some(Sort::Bitrate)),
-            (72., "DECK", None),
+            (36. * self.settings.deck_count as f32, "DECK", None),
         ];
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.;
@@ -1987,6 +2149,7 @@ impl Studio {
                 if w <= 0. {
                     continue;
                 }
+                let label = tr(label);
                 let text = if sort == Some(self.settings.library_sort) {
                     format!(
                         "{label} {}",
@@ -1997,7 +2160,7 @@ impl Studio {
                         }
                     )
                 } else {
-                    label.into()
+                    label
                 };
                 if ui
                     .add_sized(
@@ -2049,15 +2212,7 @@ impl Studio {
                     let (rect, response) =
                         ui.allocate_exact_size(Vec2::new(width, row_height), Sense::click());
                     let selected = index == self.selected;
-                    let fill = if selected {
-                        Color32::from_rgb(21, 91, 124)
-                    } else if response.hovered() {
-                        Color32::from_rgb(33, 39, 50)
-                    } else if visible_index % 2 == 0 {
-                        Color32::from_rgb(17, 17, 17)
-                    } else {
-                        Color32::from_rgb(24, 24, 24)
-                    };
+                    let fill = Color32::BLACK;
                     let fill = if self.settings.light {
                         if selected {
                             Color32::from_rgb(193, 218, 232)
@@ -2068,6 +2223,12 @@ impl Studio {
                         fill
                     };
                     ui.painter().rect_filled(rect, 0., fill);
+                    if selected {
+                        ui.painter().line_segment(
+                            [rect.left_top(), rect.left_bottom()],
+                            Stroke::new(2_f32, ACCENTS[0]),
+                        );
+                    }
                     if response.clicked() {
                         self.selected = index;
                     }
@@ -2159,7 +2320,7 @@ impl Studio {
                                     ui.visuals().weak_text_color(),
                                 );
                             }
-                            for d in 0..2 {
+                            for d in 0..self.settings.deck_count {
                                 let loaded = self.snapshot.decks[d]
                                     .track
                                     .as_ref()
@@ -2196,7 +2357,7 @@ impl Studio {
                             }
                         ))
                         .context_menu(|ui| {
-                            for i in 0..2 {
+                            for i in 0..4 {
                                 if ui
                                     .add_enabled(
                                         !entry.missing,
@@ -2225,7 +2386,7 @@ impl Studio {
                                     ui.label("Utwórz skrzynkę po lewej stronie.");
                                 }
                             });
-                            if ui.button("Pokaż folder pliku").clicked() {
+                            if ui.button(tr("Pokaż folder pliku")).clicked() {
                                 let _ = std::process::Command::new(if cfg!(windows) {
                                     "explorer"
                                 } else if cfg!(target_os = "macos") {
@@ -2240,7 +2401,7 @@ impl Studio {
                             if ui
                                 .add_enabled(
                                     self.index_jobs == 0,
-                                    egui::Button::new("Wskaż nową lokalizację…"),
+                                    egui::Button::new(tr("Wskaż nową lokalizację…")),
                                 )
                                 .clicked()
                             {
@@ -2354,7 +2515,7 @@ impl Studio {
                     .range(1.0..=30.)
                     .suffix(" s"),
             );
-            if ui.button("Następny >").clicked() {
+            if ui.button(tr("Następny >")).clicked() {
                 self.transition();
             }
             ui.label(
@@ -2384,47 +2545,203 @@ impl Studio {
     }
     fn settings_ui(&mut self, ctx: &egui::Context) {
         let mut open = self.settings_open;
-        egui::Window::new("Ustawienia studia").open(&mut open).default_width(720.).resizable(true).show(ctx,|ui|{
-            ui.horizontal(|ui|{for(i,label)in ["Audio i nagrywanie","MIDI","Automix","Sterowanie"].iter().enumerate(){ui.selectable_value(&mut self.settings_tab,i,*label);}});ui.separator();
+        egui::Window::new(tr("Ustawienia studia")).id(egui::Id::new("studio-settings")).default_pos(egui::pos2(((ctx.screen_rect().width()-840.)/2.).max(0.),80.)).open(&mut open).default_width(840.).resizable(true).show(ctx,|ui|{ egui::ScrollArea::vertical().max_height((ctx.screen_rect().height()-160.).max(300.)).show(ui,|ui|{
+            ui.horizontal(|ui|{for (i,label) in [(4,"Ogólne"),(0,"Audio i nagrywanie"),(1,"MIDI"),(2,"Automix"),(3,"Sterowanie"),(5,"O programie")] {ui.selectable_value(&mut self.settings_tab,i,tr(label));}});ui.separator();
             match self.settings_tab{
                 0=>{
                     ui.heading("Silnik audio · CPAL");
-                    if ui.button("Odśwież urządzenia").clicked(){self.outputs=audio::output_names();}
-                    egui::ComboBox::from_id_salt("master-output").selected_text(if self.settings.master_device.is_empty(){"MASTER: domyślne"}else{&self.settings.master_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.master_device,String::new(),"Domyślne wyjście systemowe");for name in &self.outputs{ui.selectable_value(&mut self.settings.master_device,name.clone(),name);}});
-                    egui::ComboBox::from_id_salt("cue-output").selected_text(if self.settings.cue_device.is_empty(){"SŁUCHAWKI: wyłączone"}else{&self.settings.cue_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.cue_device,String::new(),"Odsłuch wyłączony");for name in &self.outputs{ui.selectable_value(&mut self.settings.cue_device,name.clone(),name);}});
+                    if ui.button(tr("Odśwież urządzenia")).clicked(){self.outputs=audio::output_names();}
+                    egui::ComboBox::from_id_salt("master-output").selected_text(if self.settings.master_device.is_empty(){"MASTER: domyślne"}else{&self.settings.master_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.master_device,String::new(),tr("Domyślne wyjście systemowe"));for name in &self.outputs{ui.selectable_value(&mut self.settings.master_device,name.clone(),name);}});
+                    egui::ComboBox::from_id_salt("cue-output").selected_text(if self.settings.cue_device.is_empty(){"SŁUCHAWKI: wyłączone"}else{&self.settings.cue_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.cue_device,String::new(),tr("Odsłuch wyłączony"));for name in &self.outputs{ui.selectable_value(&mut self.settings.cue_device,name.clone(),name);}});
                     ui.add(egui::Slider::new(&mut self.settings.latency_ms,3..=100).suffix(" ms").text("Preferowany bufor"));
                     let busy=self.record_result.is_some()||self.snapshot.decks.iter().any(|d|d.playing);
-                    if ui.add_enabled(!busy,egui::Button::new("Zastosuj urządzenia audio")).clicked(){self.restart_audio();}
+                    if ui.add_enabled(!busy,egui::Button::new(tr("Zastosuj urządzenia audio"))).clicked(){self.restart_audio();}
                     ui.label("Przed zmianą wyjść zatrzymaj odtwarzanie i nagrywanie. Rozmiar bufora zależy od sterownika. Ustawienie nie jest pomiarem całkowitej latencji.");
                     ui.label("Osobny odsłuch wymaga niezależnego urządzenia systemowego. Brak rozdzielania par 1/2 i 3/4 pojedynczej karty.");
-                    ui.separator();ui.heading("Nagrywanie");
+                    ui.separator();ui.heading(tr("Nagrywanie"));
                     egui::ComboBox::from_id_salt("record-format").selected_text(self.settings.format.extension().to_uppercase()).show_ui(ui,|ui|{for format in recording::Format::ALL{ui.selectable_value(&mut self.settings.format,format,format.extension().to_uppercase());}});
                     ui.label("WAV i AIFF zapisuje kod Rust. MP3, FLAC i Ogg/Opus wymagają FFmpeg w PATH lub obok pliku programu. W razie błędu konwersji pozostaje plik WAV.");
-                    ui.checkbox(&mut self.settings.auto_bpm,"Analizuj BPM po wczytaniu utworu");
+                    ui.checkbox(&mut self.settings.auto_bpm,tr("Analizuj BPM po wczytaniu utworu"));
                     ui.label(RichText::new("Analiza jest szacunkowa; dostępne są TAP oraz ×2 / ÷2. Zmiana tempa zmienia wysokość dźwięku — brak key lock.").weak());
                 },
                 1=>self.midi_ui(ui),
                 2=>{
-                    ui.heading("Kolejka i przejścia");ui.add(egui::Slider::new(&mut self.settings.fade_seconds,1.0..=30.).text("Czas przejścia / s"));
-                    ui.checkbox(&mut self.settings.auto_favorites,"Tylko ulubione");ui.checkbox(&mut self.settings.auto_shuffle,"Losuj kolejność");ui.checkbox(&mut self.settings.auto_repeat,"Powtarzaj kolejkę");ui.checkbox(&mut self.settings.linear_fade,"Liniowa krzywa przejścia (zamiast stałej mocy)");
+                    ui.heading(tr("Kolejka i przejścia"));ui.add(egui::Slider::new(&mut self.settings.fade_seconds,1.0..=30.).text("Czas przejścia / s"));
+                    ui.checkbox(&mut self.settings.auto_favorites,tr("Tylko ulubione"));ui.checkbox(&mut self.settings.auto_shuffle,tr("Losuj kolejność"));ui.checkbox(&mut self.settings.auto_repeat,tr("Powtarzaj kolejkę"));ui.checkbox(&mut self.settings.linear_fade,tr("Liniowa krzywa przejścia (zamiast stałej mocy)"));
                     ui.label("Kolejność jest ustalana przy starcie automiksu. Ręczny transport, tempo, jog i crossfader zatrzymują automat. Automix nie wyrównuje beatów.");
                 },
-                _=>{
-                    ui.heading("Klawiatura");keyboard_help(ui);
+                3=>{
+                    ui.heading(tr("Klawiatura"));keyboard_help(ui);
                     ui.separator();ui.label("Mysz: kliknij waveform, aby przewinąć. Przeciągaj talerz poziomo. Dwuklik suwaka EQ zeruje pasmo, a dwuklik tempa zeruje tempo. Manual loop: pad 1 IN, 2 OUT, 3 OFF, 4 powrót. SHIFT + pad usuwa hot cue lub sample.");
                     ui.label("Biblioteka i ulubione są zapisywane lokalnie. Audio samplera i punkty CUE dotyczą bieżącej sesji.");
                     ui.label(format!("Ustawienia: {}",settings::config_path().display()));
-                    ui.hyperlink_to("Licencja GPL-3.0-or-later","https://www.gnu.org/licenses/gpl-3.0.html");
+                    ui.hyperlink_to("Licencja AGPL-3.0-or-later","https://www.gnu.org/licenses/agpl-3.0.html");
+                }
+                4=> {
+                    ui.heading(tr("Ogólne"));
+                    ui.label(tr("Język"));
+                    let previous=self.settings.language.clone();
+                    egui::ComboBox::from_id_salt("language").selected_text(i18n::LANGUAGES.iter().find(|(code,_)|*code == self.settings.language).map(|(_,name)|*name).unwrap_or("Polski")).show_ui(ui,|ui|{for (code,name) in i18n::LANGUAGES {ui.selectable_value(&mut self.settings.language,code.into(),i18n::shape(name));}});
+                    if self.settings.language != previous {i18n::set_language(&self.settings.language);}
+                    ui.separator();ui.heading(tr("Wygląd"));
+                    if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
+                    ui.label(tr("Liczba decków"));
+                    let previous=self.settings.deck_count;
+                    ui.horizontal(|ui|{ui.selectable_value(&mut self.settings.deck_count,2,"2 decks");ui.selectable_value(&mut self.settings.deck_count,4,"4 decks");});
+                    if previous!=self.settings.deck_count {
+                        self.send(Command::DeckCount(self.settings.deck_count));
+                        self.stop_auto();
+                        if self.settings.deck_count==2 {
+                            for i in 2..4 {self.send(Command::Deck(i,DeckControl::Pause));self.send(Command::Deck(i,DeckControl::Jog(0.,0.)));self.send(Command::Deck(i,DeckControl::Bend(0.)));}
+                            self.focused=self.focused.min(1);self.fx_deck=self.fx_deck.min(1);
+                        }
+                    }
+                    ui.label(tr("4 decki: crossfader A/C ↔ B/D. Automix działa na A/B."));
+                    ui.separator();ui.checkbox(&mut self.settings.graphic_logo,tr("Logo graficzne"));ui.label(tr("Font logo"));ui.label("Helvetica Neue 95 Black");ui.label(&self.font_name);
+                    ui.horizontal(|ui|{
+                        if ui.button(tr("Wybierz font…")).clicked(){if let Some(path)=rfd::FileDialog::new().add_filter("Font",&["ttf","otf"]).pick_file(){
+                            match std::fs::read(&path) {
+                                Ok(bytes) if bytes.len()<16*1024*1024 && ttf_parser::Face::parse(&bytes,0).is_ok()=>{self.settings.logo_font=Some(path);self.font_name=crate::fonts::install(ctx,self.settings.logo_font.as_deref());},
+                                _=>self.status="Invalid or oversized font file".into()
+                            }
+                        }}
+                        if ui.button(tr("Przywróć font domyślny")).clicked(){self.settings.logo_font=None;self.font_name=crate::fonts::install(ctx,None);}
+                    });
+                    ui.label("Helvetica Neue is used only from your licensed system/font file. The bundled fallback is DejaVu Sans Bold; no proprietary font is distributed.");
+                },
+                _=> {
+                    ui.heading(format!("PROSPEKT DJ {} · BETA",env!("CARGO_PKG_VERSION")));
+                    ui.label(tr("Open source — kod źródłowy dostępny publicznie"));ui.label("AGPL-3.0-or-later");
+                    ui.horizontal_wrapped(|ui|{
+                        ui.hyperlink_to(tr("Kod źródłowy"),"https://github.com/prospektdj/prospektdj");
+                        ui.hyperlink_to(tr("Zgłoś błąd"),"https://github.com/prospektdj/prospektdj/issues");
+                        ui.hyperlink_to(tr("Pobierz nowe wydanie"),"https://github.com/prospektdj/prospektdj/releases");
+                        ui.hyperlink_to("GitHub · Licenses","https://github.com/prospektdj/prospektdj/tree/main/licenses");
+                    });
+                    ui.separator();ui.heading(tr("Licencje"));
+                    ui.text_edit_singleline(&mut self.license_search);
+                    let licenses=prospekt_dj::notices::LICENSES;
+                    egui::ComboBox::from_id_salt("license-list").width(700.).selected_text(licenses[self.license_selected].0).show_ui(ui,|ui|{
+                        for (i,(name,_)) in licenses.iter().enumerate(){if name.to_lowercase().contains(&self.license_search.to_lowercase()){ui.selectable_value(&mut self.license_selected,i,*name);}}
+                    });
+                    egui::ScrollArea::vertical().id_salt("license-text").max_height(320.).show(ui,|ui|{let mut text=licenses[self.license_selected].1;ui.add(egui::TextEdit::multiline(&mut text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));});
                 }
             }
-            ui.separator();if ui.button("Zapisz ustawienia").clicked(){self.persist();self.status="Ustawienia zapisane".into();}
-        });
+            ui.separator();if ui.button(tr("Zapisz ustawienia")).clicked(){self.persist();self.status="Ustawienia zapisane".into();}
+        });});
         self.settings_open = open;
     }
     fn midi_ui(&mut self, ui: &mut egui::Ui) {
+        ui.heading(tr("Profil kontrolera"));
+        ui.add(
+            egui::TextEdit::singleline(&mut self.controller_search)
+                .hint_text(tr("Search manufacturer / model")),
+        );
+        let selected = self
+            .settings
+            .controller_profile
+            .and_then(|i| self.settings.controller_profiles.get(i))
+            .map(|p| p.label())
+            .unwrap_or_else(|| tr("Brak profili — zaimportuj mapowanie"));
+        egui::ComboBox::from_id_salt("controller-profile")
+            .width(600.)
+            .selected_text(selected)
+            .show_ui(ui, |ui| {
+                for (i, profile) in self.settings.controller_profiles.iter().enumerate() {
+                    if !profile
+                        .label()
+                        .to_lowercase()
+                        .contains(&self.controller_search.to_lowercase())
+                    {
+                        continue;
+                    }
+                    ui.selectable_value(
+                        &mut self.settings.controller_profile,
+                        Some(i),
+                        profile.label(),
+                    );
+                }
+            });
+        if let Some(index) = self.settings.controller_profile {
+            if let Some(profile) = self.settings.controller_profiles.get_mut(index) {
+                ui.add_enabled_ui(!profile.source.starts_with("builtin:"), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(tr("Producent"));
+                        ui.text_edit_singleline(&mut profile.manufacturer);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(tr("Model"));
+                        ui.text_edit_singleline(&mut profile.model);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(tr("Nazwa profilu"));
+                        ui.text_edit_singleline(&mut profile.name);
+                    });
+                });
+                ui.label(format!(
+                    "{} MIDI bindings · {} skipped",
+                    profile.mappings.len(),
+                    profile.skipped
+                ));
+                if !profile.authors.is_empty() {
+                    ui.label(format!("Authors: {}", profile.authors));
+                }
+                if !profile.source.is_empty() {
+                    ui.label(format!("Source: {}", profile.source));
+                }
+                if !profile.unsupported.is_empty() {
+                    ui.collapsing(tr("Compatibility details"), |ui| {
+                        for reason in &profile.unsupported {
+                            ui.label(reason);
+                        }
+                    });
+                }
+                if ui
+                    .add_enabled(
+                        !profile.mappings.is_empty(),
+                        egui::Button::new(tr("Zastosuj profil")),
+                    )
+                    .clicked()
+                {
+                    self.settings.midi = profile.mappings.clone();
+                }
+                if !profile.source.starts_with("builtin:") && ui.button(tr("Usuń")).clicked() {
+                    self.settings.controller_profiles.remove(index);
+                    self.settings.controller_profile = None;
+                }
+            }
+        }
+        ui.collapsing(tr("Zapisz bieżącą mapę jako profil"), |ui| {
+            ui.label(tr("Producent"));
+            ui.text_edit_singleline(&mut self.profile_manufacturer);
+            ui.label(tr("Model"));
+            ui.text_edit_singleline(&mut self.profile_model);
+            ui.label(tr("Nazwa profilu"));
+            ui.text_edit_singleline(&mut self.profile_name);
+            if ui
+                .add_enabled(
+                    !self.profile_name.trim().is_empty(),
+                    egui::Button::new(tr("Zapisz bieżącą mapę jako profil")),
+                )
+                .clicked()
+            {
+                self.settings
+                    .controller_profiles
+                    .push(midi::ControllerProfile {
+                        manufacturer: self.profile_manufacturer.clone(),
+                        model: self.profile_model.clone(),
+                        name: self.profile_name.clone(),
+                        mappings: self.settings.midi.clone(),
+                        ..Default::default()
+                    });
+                self.settings.controller_profile =
+                    Some(self.settings.controller_profiles.len() - 1);
+            }
+        });
+        ui.separator();
         ui.heading("MIDI Learn");
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Odśwież wejścia").clicked() {
+            if ui.button(tr("Odśwież wejścia")).clicked() {
                 self.midi_names = midi::inputs();
             }
             egui::ComboBox::from_id_salt("midi-input")
@@ -2432,7 +2749,7 @@ impl Studio {
                     self.midi_names
                         .get(self.midi_selected)
                         .map(String::as_str)
-                        .unwrap_or("Brak urządzeń"),
+                        .unwrap_or(&tr("Brak urządzeń")),
                 )
                 .show_ui(ui, |ui| {
                     for (i, name) in self.midi_names.iter().enumerate() {
@@ -2441,9 +2758,9 @@ impl Studio {
                 });
             if ui
                 .button(if self.midi_connection.is_some() {
-                    "Połącz ponownie"
+                    tr("Połącz ponownie")
                 } else {
-                    "Połącz"
+                    tr("Połącz")
                 })
                 .clicked()
             {
@@ -2456,7 +2773,7 @@ impl Studio {
                     Err(error) => self.status = format!("MIDI: {error}"),
                 }
             }
-            if ui.button("Rozłącz").clicked() {
+            if ui.button(tr("Rozłącz")).clicked() {
                 self.midi_connection = None;
                 self.midi_reconnect_name = None;
                 self.learn = false;
@@ -2484,9 +2801,9 @@ impl Studio {
             .selectable_label(
                 self.learn,
                 if self.learn {
-                    "Anuluj — czekam na MIDI…"
+                    tr("Anuluj — czekam na MIDI…")
                 } else {
-                    "Przypisz MIDI"
+                    tr("Przypisz MIDI")
                 },
             )
             .clicked()
@@ -2495,12 +2812,34 @@ impl Studio {
         }
         ui.label(&self.last_midi);
         ui.horizontal(|ui| {
-            if ui.button("Eksport mapy JSON").clicked() {
+            if ui.button(tr("Eksport mapy JSON")).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .set_file_name("Prospekt_MIDI.json")
                     .save_file()
                 {
-                    match serde_json::to_vec_pretty(&self.settings.midi)
+                    let profile = midi::ControllerProfile {
+                        manufacturer: self
+                            .settings
+                            .controller_profile
+                            .and_then(|i| self.settings.controller_profiles.get(i))
+                            .map(|p| p.manufacturer.clone())
+                            .unwrap_or_default(),
+                        model: self
+                            .settings
+                            .controller_profile
+                            .and_then(|i| self.settings.controller_profiles.get(i))
+                            .map(|p| p.model.clone())
+                            .unwrap_or_default(),
+                        name: self
+                            .settings
+                            .controller_profile
+                            .and_then(|i| self.settings.controller_profiles.get(i))
+                            .map(|p| p.name.clone())
+                            .unwrap_or_else(|| "Custom".into()),
+                        mappings: self.settings.midi.clone(),
+                        ..Default::default()
+                    };
+                    match serde_json::to_vec_pretty(&profile)
                         .map_err(anyhow::Error::from)
                         .and_then(|data| Ok(std::fs::write(path, data)?))
                     {
@@ -2509,17 +2848,28 @@ impl Studio {
                     }
                 }
             }
-            if ui.button("Import mapy JSON").clicked() {
+            if ui.button(tr("Import mapy JSON")).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Mapa MIDI", &["json"])
+                    .add_filter("MIDI mapping", &["json", "xml", "opendj-mapping"])
                     .pick_file()
                 {
-                    let result = std::fs::read(path)
-                        .map_err(anyhow::Error::from)
-                        .and_then(|data| midi::import_json(&data, &actions()));
+                    let filename = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    let result =
+                        std::fs::read(path)
+                            .map_err(anyhow::Error::from)
+                            .and_then(|data| {
+                                midi::ControllerProfile::import(&data, &filename, &actions())
+                            });
                     match result {
-                        Ok(maps) => {
-                            self.settings.midi = maps;
+                        Ok(profile) => {
+                            self.settings.midi = profile.mappings.clone();
+                            self.settings.controller_profiles.push(profile);
+                            self.settings.controller_profile =
+                                Some(self.settings.controller_profiles.len() - 1);
                             self.status = "Mapa MIDI wczytana".into();
                         }
                         Err(e) => self.status = format!("Mapa MIDI: {e}"),
@@ -2537,7 +2887,7 @@ impl Studio {
                             "{} ← {}:{} · {:?}",
                             m.action, m.status, m.number, m.encoding
                         ));
-                        if ui.small_button("Usuń").clicked() {
+                        if ui.small_button(tr("Usuń")).clicked() {
                             remove = Some(i);
                         }
                     });
@@ -2546,7 +2896,7 @@ impl Studio {
         if let Some(i) = remove {
             self.settings.midi.remove(i);
         }
-        ui.label("Obsługa Note i CC, względnych enkoderów oraz import map z poprzedniej wersji HTML. Brak fabrycznej mapy DJ2GO2 i sprzętowych LED. Połączenie odnawia się po ponownym podłączeniu kontrolera o tej samej nazwie.");
+        ui.label("Obsługa Note i CC, względnych enkoderów oraz import map z poprzedniej wersji HTML. Profile kontrolerów pochodzą z zaimportowanych map; sprzętowe LED nie są obsługiwane. Połączenie odnawia się po ponownym podłączeniu kontrolera o tej samej nazwie.");
     }
     fn midi_message(&mut self, bytes: &[u8]) {
         let Some((status, number, value)) = midi::key(bytes) else {
@@ -2562,6 +2912,8 @@ impl Studio {
                 number,
                 action: self.learn_action.clone(),
                 encoding: self.encoding,
+                inverted: false,
+                relative: false,
             });
             self.learn = false;
             self.persist();
@@ -2577,7 +2929,14 @@ impl Studio {
             return;
         };
         let action = map.action.as_str();
-        let absolute = value as f32 / 127.;
+        let current = match action {
+            "cross" => self.snapshot.cross,
+            "master" => self.snapshot.master,
+            "phones" => self.snapshot.phones,
+            "samplevolume" => self.snapshot.sample_volume,
+            _ => 0.5,
+        };
+        let absolute = map.normalized(value, current);
         match action {
             "cross" => {
                 self.stop_auto();
@@ -2586,8 +2945,9 @@ impl Studio {
             "master" => self.send(Command::Master(absolute)),
             "phones" => self.send(Command::Phones(absolute)),
             "samplevolume" => self.send(Command::SampleVolume(absolute)),
+            "record" if value > 0 => self.record(),
             "browse" => {
-                let delta = midi::relative(value, map.encoding);
+                let delta = midi::relative(value, map.encoding) * if map.inverted { -1 } else { 1 };
                 self.scroll_selected = true;
                 let visible = self.visible();
                 if let Some(current) = visible.iter().position(|i| *i == self.selected) {
@@ -2605,7 +2965,102 @@ impl Studio {
                 let Ok(i) = deck.parse::<usize>() else {
                     return;
                 };
-                if i > 1 {
+                if i >= self.settings.deck_count {
+                    return;
+                }
+                let d = &self.snapshot.decks[i];
+                let current = match control {
+                    "gain" => d.volume,
+                    "pitch" => ((d.rate as f32 - 1.) / 0.16 + 0.5).clamp(0., 1.),
+                    "filter" => (d.fx.filter + 1.) * 0.5,
+                    "eq0" | "eq1" | "eq2" => {
+                        let db = d.eq[(control.as_bytes()[2] - b'0') as usize];
+                        0.5 + if db < 0. { db / 48. } else { db / 24. }
+                    }
+                    _ => 0.5,
+                };
+                let absolute = map.normalized(value, current);
+                if control == "touch" {
+                    if (value > 0) != d.scratch {
+                        self.send(Command::Deck(i, DeckControl::ScratchMode));
+                    }
+                    if value == 0 {
+                        self.send(Command::Deck(i, DeckControl::Jog(0., 0.)));
+                    }
+                    return;
+                }
+                if value > 0 {
+                    if let Some(p) = control
+                        .strip_prefix("hotcue")
+                        .and_then(|p| p.parse::<usize>().ok())
+                        .filter(|p| *p < 8)
+                    {
+                        self.deck(i, DeckControl::PadMode(PadMode::HotCue));
+                        self.deck(i, DeckControl::Pad(p, false));
+                        return;
+                    }
+                    if let Some(p) = control
+                        .strip_prefix("hotclear")
+                        .and_then(|p| p.parse::<usize>().ok())
+                        .filter(|p| *p < 8)
+                    {
+                        self.deck(i, DeckControl::PadMode(PadMode::HotCue));
+                        self.deck(i, DeckControl::Pad(p, true));
+                        return;
+                    }
+                    if control == "loopin" || control == "loopout" {
+                        self.deck(i, DeckControl::PadMode(PadMode::ManualLoop));
+                        self.deck(
+                            i,
+                            DeckControl::Pad(usize::from(control == "loopout"), false),
+                        );
+                        return;
+                    }
+                    let beats = match control {
+                        "loop1" => Some(1.),
+                        "loop2" => Some(2.),
+                        "loop4" => Some(4.),
+                        "loop8" => Some(8.),
+                        _ => None,
+                    };
+                    if let Some(beats) = beats {
+                        self.deck(i, DeckControl::Loop(beats));
+                        return;
+                    }
+                    if control == "loopdouble" || control == "loophalf" {
+                        self.deck(
+                            i,
+                            DeckControl::LoopScale(if control == "loopdouble" { 2. } else { 0.5 }),
+                        );
+                        return;
+                    }
+                }
+                let extra = match control {
+                    "chorus_mix" => Some((FxParam::ChorusMix, absolute)),
+                    "chorus_rate" => Some((FxParam::ChorusRate, 0.05 + absolute * 4.95)),
+                    "tremolo_depth" => Some((FxParam::TremoloDepth, absolute)),
+                    "tremolo_rate" => Some((FxParam::TremoloRate, 0.1 + absolute * 15.9)),
+                    "drive" => Some((FxParam::Drive, 1. + absolute * 19.)),
+                    "distortion_mix" => Some((FxParam::DistortionMix, absolute)),
+                    "crusher_bits" => Some((FxParam::CrusherBits, 4. + absolute * 12.)),
+                    "crusher_mix" => Some((FxParam::CrusherMix, absolute)),
+                    _ => None,
+                };
+                if let Some((param, value)) = extra {
+                    self.send(Command::Deck(i, DeckControl::FxParam(param, value)));
+                    return;
+                }
+                let switch = match control {
+                    "chorus_on" => Some(FxSwitch::Chorus),
+                    "tremolo_on" => Some(FxSwitch::Tremolo),
+                    "distortion_on" => Some(FxSwitch::Distortion),
+                    "crusher_on" => Some(FxSwitch::Crusher),
+                    _ => None,
+                };
+                if let Some(switch) = switch {
+                    if value > 0 {
+                        self.send(Command::Deck(i, DeckControl::FxToggle(switch)));
+                    }
                     return;
                 }
                 match control {
@@ -2632,11 +3087,16 @@ impl Studio {
                         i,
                         DeckControl::Eq(
                             control.as_bytes()[2] as usize - b'0' as usize,
-                            absolute * 36. - 24.,
+                            if absolute < 0.5 {
+                                (absolute - 0.5) * 48.
+                            } else {
+                                (absolute - 0.5) * 24.
+                            },
                         ),
                     )),
                     "jog" => {
-                        let value = midi::relative(value, map.encoding) as f64;
+                        let value = midi::relative(value, map.encoding) as f64
+                            * if map.inverted { -1. } else { 1. };
                         let d = &self.snapshot.decks[i];
                         let speed = if d.scratch {
                             value * 0.45
@@ -2681,10 +3141,12 @@ impl Studio {
                                 }),
                             ));
                         }
-                        "pad0" | "pad1" | "pad2" | "pad3" => self.deck(
-                            i,
-                            DeckControl::Pad((control.as_bytes()[3] - b'0') as usize, false),
-                        ),
+                        "pad0" | "pad1" | "pad2" | "pad3" | "pad4" | "pad5" | "pad6" | "pad7" => {
+                            self.deck(
+                                i,
+                                DeckControl::Pad((control.as_bytes()[3] - b'0') as usize, false),
+                            )
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -2756,6 +3218,23 @@ impl Studio {
                     .clamp(0, visible.len().saturating_sub(1) as isize)
                     as usize;
                 self.selected = visible[next];
+            }
+        }
+        for (p, key) in [
+            egui::Key::F1,
+            egui::Key::F2,
+            egui::Key::F3,
+            egui::Key::F4,
+            egui::Key::F5,
+            egui::Key::F6,
+            egui::Key::F7,
+            egui::Key::F8,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if pressed(key) {
+                self.deck(self.focused, DeckControl::Pad(p, shift));
             }
         }
         for (i, keys) in [
@@ -2864,7 +3343,7 @@ impl eframe::App for Studio {
         }
         let focused = ctx.input(|input| input.focused);
         if !focused && self.had_focus {
-            for i in 0..2 {
+            for i in 0..4 {
                 self.send(Command::Deck(i, DeckControl::Jog(0., 0.)));
                 self.send(Command::Deck(i, DeckControl::Bend(0.)));
             }
@@ -2879,12 +3358,15 @@ impl eframe::App for Studio {
             egui::TopBottomPanel::top(egui::Id::new((
                 "performance",
                 self.dock_tab,
+                self.settings.deck_count,
                 self.settings.show_effects,
             )))
             .resizable(true)
-            .default_height(if self.settings.show_effects {
+            .default_height(if self.settings.deck_count == 4 {
+                730.
+            } else if self.settings.show_effects {
                 match self.dock_tab {
-                    0 => 500.,
+                    0 => 620.,
                     1 => 435.,
                     _ => 455.,
                 }
@@ -2924,11 +3406,7 @@ impl eframe::App for Studio {
     }
 }
 fn letter(i: usize) -> &'static str {
-    if i == 0 {
-        "A"
-    } else {
-        "B"
-    }
+    ["A", "B", "C", "D"].get(i).copied().unwrap_or("?")
 }
 fn time(seconds: f64) -> String {
     let s = seconds.max(0.);
@@ -2963,54 +3441,7 @@ fn keyboard_help(ui: &mut egui::Ui) {
     ui.label("Q / P — play deck A / B; A / L — CUE; Spacja — play aktywnego decka; Escape — pauza obu; ← / → — crossfader; Z / X i N / M — pitch bend; 1–4 i 7–0 — pady; SHIFT + pad — usuń; Enter / SHIFT+Enter — załaduj A / B; ↑ / ↓ — wybór w bibliotece; F11 — pełny ekran.");
 }
 fn actions() -> Vec<String> {
-    let mut out = ["cross", "master", "phones", "samplevolume", "browse"]
-        .map(String::from)
-        .to_vec();
-    for i in 0..2 {
-        for name in [
-            "play",
-            "cue",
-            "setcue",
-            "sync",
-            "scratch",
-            "pfl",
-            "loopoff",
-            "load",
-            "pitch",
-            "gain",
-            "jog",
-            "hot",
-            "auto",
-            "manual",
-            "sample",
-            "pad0",
-            "pad1",
-            "pad2",
-            "pad3",
-            "eq0",
-            "eq1",
-            "eq2",
-            "fx_bypass",
-            "filter",
-            "filter_on",
-            "echo_on",
-            "echo_mix",
-            "echo_feedback",
-            "echo_time",
-            "echo_sync",
-            "reverb_on",
-            "reverb_mix",
-            "reverb_room",
-            "reverb_damping",
-            "flanger_on",
-            "flanger_mix",
-            "flanger_rate",
-            "flanger_depth",
-        ] {
-            out.push(format!("{i}.{name}"));
-        }
-    }
-    out
+    midi::actions()
 }
 fn cover(ctx: &egui::Context, deck: usize, bytes: Option<&[u8]>) -> Option<egui::TextureHandle> {
     let bytes = bytes?;
@@ -3172,21 +3603,43 @@ fn console_theme(ctx: &egui::Context, light: bool) {
         egui::Visuals::dark()
     };
     if !light {
-        v.panel_fill = Color32::from_rgb(17, 17, 17);
-        v.window_fill = Color32::from_rgb(30, 30, 30);
+        v.panel_fill = Color32::BLACK;
+        v.window_fill = Color32::BLACK;
         v.extreme_bg_color = Color32::BLACK;
-        v.faint_bg_color = Color32::from_rgb(24, 24, 24);
-        v.widgets.inactive.bg_fill = Color32::from_rgb(42, 42, 42);
-        v.widgets.inactive.weak_bg_fill = Color32::from_rgb(35, 35, 35);
-        v.widgets.inactive.bg_stroke = Stroke::new(1_f32, Color32::from_rgb(62, 62, 62));
-        v.widgets.hovered.bg_fill = Color32::from_rgb(55, 55, 55);
+        v.faint_bg_color = Color32::BLACK;
+        v.widgets.inactive.bg_fill = Color32::BLACK;
+        v.widgets.inactive.weak_bg_fill = Color32::BLACK;
+        v.widgets.inactive.bg_stroke = Stroke::new(1_f32, Color32::BLACK);
+        v.widgets.hovered.bg_fill = Color32::BLACK;
         v.override_text_color = Some(Color32::from_rgb(216, 226, 237));
     }
     v.widgets.inactive.corner_radius = egui::CornerRadius::same(1);
     v.widgets.hovered.corner_radius = egui::CornerRadius::same(1);
     v.widgets.active.corner_radius = egui::CornerRadius::same(1);
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.22 };
-    v.selection.bg_fill = Color32::from_rgb(27, 91, 126);
+    v.selection.bg_fill = if light {
+        Color32::from_rgb(27, 91, 126)
+    } else {
+        Color32::BLACK
+    };
+    if !light {
+        v.window_fill = Color32::BLACK;
+        v.panel_fill = Color32::BLACK;
+        v.extreme_bg_color = Color32::BLACK;
+        v.faint_bg_color = Color32::BLACK;
+        v.code_bg_color = Color32::BLACK;
+        for w in [
+            &mut v.widgets.noninteractive,
+            &mut v.widgets.inactive,
+            &mut v.widgets.hovered,
+            &mut v.widgets.active,
+            &mut v.widgets.open,
+        ] {
+            w.bg_fill = Color32::BLACK;
+            w.weak_bg_fill = Color32::BLACK;
+        }
+        v.selection.stroke = Stroke::new(1_f32, ACCENTS[0]);
+    }
     ctx.set_visuals(v);
 }
 

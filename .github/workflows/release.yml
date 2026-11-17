@@ -1,4 +1,4 @@
-name: Build and publish native packages
+name: Build and publish BETA packages
 on:
   workflow_dispatch:
   push:
@@ -7,6 +7,8 @@ on:
       - '.github/workflows/release.yml'
       - 'scripts/package_release.py'
       - 'scripts/package_deb.py'
+      - 'scripts/package_appimage.sh'
+      - 'scripts/package_flatpak.sh'
 permissions:
   contents: read
 concurrency:
@@ -41,7 +43,7 @@ jobs:
           key: release-${{ matrix.target }}
       - name: Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev libgl1-mesa-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev libgl1-mesa-dev pkg-config flatpak xvfb libfuse2 file patchelf desktop-file-utils
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets --target ${{ matrix.target }} -- -D warnings
       - run: cargo test --locked --target ${{ matrix.target }}
@@ -61,6 +63,23 @@ jobs:
           test -f /usr/share/applications/prospekt-dj.desktop
           ldd /usr/bin/prospekt-dj | tee /tmp/prospekt-libraries.txt
           ! grep -q 'not found' /tmp/prospekt-libraries.txt
+      - name: Build and verify AppImage
+        if: runner.os == 'Linux'
+        run: bash scripts/package_appimage.sh
+      - name: Build and install Flatpak BETA
+        if: runner.os == 'Linux'
+        run: bash scripts/package_flatpak.sh
+      - name: AppImage and Flatpak GUI smoke tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a timeout 8s release-dist/*.AppImage --demo > appimage-smoke.log 2>&1
+          appimage_result=$?
+          xvfb-run -a timeout 8s flatpak run --env=LIBGL_ALWAYS_SOFTWARE=1 org.prospektdj.ProspektDJ --demo > flatpak-smoke.log 2>&1
+          flatpak_result=$?
+          cat appimage-smoke.log flatpak-smoke.log
+          test "$appimage_result" -eq 124 && test "$flatpak_result" -eq 124
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.platform }}
@@ -68,6 +87,8 @@ jobs:
             release-dist/*.zip
             release-dist/*.tar.gz
             release-dist/*.deb
+            release-dist/*.AppImage
+            release-dist/*.flatpak
           if-no-files-found: error
   publish:
     needs: build
@@ -90,17 +111,22 @@ jobs:
           import re
           version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
           assets = sorted(Path('release-assets').glob('*'))
-          assert len(assets) == 3, f'Expected three native packages, got {len(assets)}'
+          assert len(assets) == 5, f'Expected five BETA packages, got {len(assets)}'
           Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
           with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
               file.write(f'RELEASE_TAG=rust-v{version}\nRELEASE_VERSION={version}\n')
           PY
           cat > release-notes.md <<'NOTES'
-          Natywna aplikacja Prospekt DJ napisana w Rust.
+          **BETA — wersja testowa / beta release.**
+
+          Prospekt DJ Rust 2.2 BETA — black interface, 2/4 decks, eight hot cues per deck, eight effects and controller profiles.
+          Open source: AGPL-3.0-or-later. Proprietary Helvetica font is not bundled; select a licensed local file in settings.
 
           - Windows x64: rozpakuj ZIP i uruchom prospekt-dj.exe.
           - Linux x64: rozpakuj tar.gz i uruchom ./prospekt-dj. Kompilacja na Ubuntu 22.04; wymagany pulpit, ALSA i OpenGL.
-          - Debian/Ubuntu amd64: pobierz .deb i zainstaluj: sudo apt install ./prospekt-dj_2.1.0_amd64.deb. Pakiet dodaje program do menu aplikacji.
+          - AppImage: nadaj plikowi prawa wykonywania (chmod +x *.AppImage) i uruchom go.
+          - Flatpak: flatpak install --user ./Prospekt-DJ-Rust-*.flatpak; uruchom: flatpak run org.prospektdj.ProspektDJ. Runtime pobierany jest z Flathub.
+          - Debian/Ubuntu amd64: pobierz .deb i zainstaluj: sudo apt install ./prospekt-dj_*_amd64.deb. Pakiet dodaje program do menu aplikacji.
 
           Linux: Ubuntu 22.04+ / Debian 12+ (glibc 2.35+), wymagany pulpit. Windows: brak podpisu wydawcy. Testy automatyczne nie zastępują testów fizycznego kontrolera MIDI i interfejsu audio.
 
@@ -111,4 +137,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Prospekt DJ Rust $RELEASE_VERSION" --notes-file release-notes.md
+          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — BETA" --notes-file release-notes.md

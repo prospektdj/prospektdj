@@ -7,3 +7,10 @@ pub mod media;
 pub mod midi;
 pub mod recording;
 pub mod settings;
+
+pub mod i18n;
+pub mod telemetry;
+
+pub mod notices;
+
+pub mod controller_import;
