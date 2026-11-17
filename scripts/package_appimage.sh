@@ -22,7 +22,7 @@ curl --fail --location --retry 3 https://github.com/linuxdeploy/linuxdeploy/rele
 chmod +x release-tools/linuxdeploy.AppImage
 export APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 VERSION="$version"
 # Build the AppDir first, so all copied system-library notices can be added before packing.
-release-tools/linuxdeploy.AppImage --appdir "$appdir" --executable "$appdir/usr/bin/prospekt-dj" --desktop-file "$appdir/usr/share/applications/prospekt-dj.desktop" --icon-file "$appdir/usr/share/icons/hicolor/512x512/apps/prospekt-dj.png" --library /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 --library /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 --library /usr/lib/x86_64-linux-gnu/libX11.so.6
+release-tools/linuxdeploy.AppImage --appdir "$appdir" --executable "$appdir/usr/bin/prospekt-dj" --desktop-file "$appdir/usr/share/applications/prospekt-dj.desktop" --icon-file "$appdir/usr/share/icons/hicolor/512x512/apps/prospekt-dj.png" --library /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 --library /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 --library /usr/lib/x86_64-linux-gnu/libX11.so.6 --library /usr/lib/x86_64-linux-gnu/libxcb.so.1 --library /usr/lib/x86_64-linux-gnu/libxcb-xkb.so.1 --library /usr/lib/x86_64-linux-gnu/libasound.so.2
 python3 - <<'PY'
 from pathlib import Path
 import shutil,subprocess
