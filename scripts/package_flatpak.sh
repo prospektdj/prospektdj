@@ -16,8 +16,8 @@ cp assets/icon.png "$build/files/share/icons/hicolor/512x512/apps/$app_id.png"
 cat > "$build/files/share/applications/$app_id.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=Prospekt DJ BETA
-Comment=Open source DJ studio — BETA
+Name=Prospekt DJ PRE-BETA
+Comment=Open source DJ studio — PRE-BETA
 Exec=prospekt-dj
 Icon=$app_id
 Terminal=false
@@ -27,8 +27,8 @@ cat > "$build/files/share/metainfo/$app_id.metainfo.xml" <<META
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>$app_id</id><metadata_license>CC0-1.0</metadata_license><project_license>AGPL-3.0-or-later</project_license>
-  <name>Prospekt DJ BETA</name><summary>Open source DJ studio — BETA</summary>
-  <description><p>BETA DJ application with two or four decks, effects, hot cues, sampler, MIDI controller profiles and a music library.</p></description>
+  <name>Prospekt DJ PRE-BETA</name><summary>Open source DJ studio — PRE-BETA</summary>
+  <description><p>PRE-BETA DJ application with two or four decks, effects, hot cues, sampler, MIDI controller profiles and a music library.</p></description>
   <launchable type="desktop-id">$app_id.desktop</launchable><url type="homepage">https://github.com/prospektdj/prospektdj</url>
   <content_rating type="oars-1.1"/><releases><release version="$version" type="development" date="$(date -u +%F)"/></releases>
 </component>

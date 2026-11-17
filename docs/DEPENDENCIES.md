@@ -1,6 +1,6 @@
-# BETA — biblioteki i licencje
+# PRE-BETA — biblioteki i licencje
 
-Prospekt DJ 2.3 BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
+Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
 
 | Library | Version | License | Source |
 |---|---|---|---|

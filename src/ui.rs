@@ -323,7 +323,7 @@ impl Studio {
             library_focus: false,
             dock_tab,
             zoom: 8.,
-            status: "Gotowy · BETA · Rust Edition · pliki pozostają na komputerze".into(),
+            status: "Gotowy · PRE-BETA · Rust Edition · pliki pozostają na komputerze".into(),
             deck_tokens: [0; 4],
             sample_tokens: [0; 4],
             loading: [false; 4],
@@ -1126,7 +1126,7 @@ impl Studio {
                 ui.painter().text(
                     egui::pos2(rect.center().x, rect.top() + 32.),
                     egui::Align2::CENTER_CENTER,
-                    format!("OPEN SOURCE · {} · BETA", env!("CARGO_PKG_VERSION")),
+                    format!("OPEN SOURCE · {} · PRE-BETA", env!("CARGO_PKG_VERSION")),
                     FontId::proportional(9.),
                     Color32::from_rgb(255, 99, 135),
                 );
@@ -3439,7 +3439,7 @@ impl Studio {
                     ui.label("Helvetica Neue is used only from your licensed system/font file. The bundled fallback is DejaVu Sans Bold; no proprietary font is distributed.");
                 },
                 _=> {
-                    ui.heading(format!("PROSPEKT DJ {} · BETA",env!("CARGO_PKG_VERSION")));
+                    ui.heading(format!("PROSPEKT DJ {} · PRE-BETA",env!("CARGO_PKG_VERSION")));
                     ui.label(tr("Open source — kod źródłowy dostępny publicznie"));ui.label("AGPL-3.0-or-later");
                     ui.horizontal_wrapped(|ui|{
                         ui.hyperlink_to(tr("Kod źródłowy"),"https://github.com/prospektdj/prospektdj");

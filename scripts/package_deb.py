@@ -39,8 +39,8 @@ width, height = struct.unpack('>II', icon.read_bytes()[16:24])
 shutil.copy2(icon, directory(f'usr/share/icons/hicolor/{width}x{height}/apps') / 'prospekt-dj.png')
 (directory('usr/share/applications') / 'prospekt-dj.desktop').write_text('''[Desktop Entry]
 Type=Application
-Name=Prospekt DJ BETA
-Comment=Open source DJ studio — BETA
+Name=Prospekt DJ PRE-BETA
+Comment=Open source DJ studio — PRE-BETA
 Exec=prospekt-dj
 Icon=prospekt-dj
 Terminal=false
@@ -58,7 +58,7 @@ Installed-Size: {(size + 1023) // 1024}
 Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libx11-6, libxkbcommon0, libxkbcommon-x11-0, libgl1, xdg-utils, xdg-desktop-portal
 Recommends: ffmpeg
 Homepage: https://github.com/prospektdj/prospektdj
-Description: BETA open source DJ studio written in Rust
+Description: PRE-BETA open source DJ studio written in Rust
  Two decks, RGB waveforms, effects, sampler, music library,
  MIDI mapping, automix and mix recording.
 ''')

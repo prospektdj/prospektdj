@@ -17,10 +17,10 @@ fn main() {
         let mut resource = winresource::WindowsResource::new();
         resource
             .set_icon("assets/icon.ico")
-            .set("ProductName", "Prospekt DJ BETA")
+            .set("ProductName", "Prospekt DJ PRE-BETA")
             .set(
                 "FileDescription",
-                "Prospekt DJ — open source BETA DJ studio",
+                "Prospekt DJ — open source PRE-BETA DJ studio",
             );
         resource
             .compile()

@@ -1,4 +1,4 @@
-name: Build and publish BETA packages
+name: Build and publish PRE-BETA packages
 on:
   workflow_dispatch:
   push:
@@ -66,7 +66,7 @@ jobs:
       - name: Build and verify AppImage
         if: runner.os == 'Linux'
         run: bash scripts/package_appimage.sh
-      - name: Build and install Flatpak BETA
+      - name: Build and install Flatpak PRE-BETA
         if: runner.os == 'Linux'
         run: bash scripts/package_flatpak.sh
       - name: AppImage and Flatpak GUI smoke tests
@@ -112,17 +112,22 @@ jobs:
           import re
           version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
           assets = sorted(Path('release-assets').glob('*'))
-          assert len(assets) == 5, f'Expected five BETA packages, got {len(assets)}'
-          Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
+          assert len(assets) == 5, f'Expected five PRE-BETA packages, got {len(assets)}'
+          screenshots = sorted(Path('docs/screenshots').glob('prebeta-*.png'))
+          assert len(screenshots) == 4, 'Expected four current PRE-BETA screenshots'
+          Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets + screenshots))
           with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
               file.write(f'RELEASE_TAG=rust-v{version}\nRELEASE_VERSION={version}\n')
           PY
           cat > release-notes.md <<'NOTES'
-          **BETA — wersja testowa / beta release.**
+          **PRE-BETA — wersja testowa / pre-beta release.**
 
-          Prospekt DJ Rust 2.3 BETA — compact DJ layout, larger animated jogs, spring pitch-bend faders, larger channel/crossfader controls, eight colored hot cues, nested crates, 3,846 offline color Twemoji icons, lazy folder tree, cover strip and verified online artwork.
+          Prospekt DJ Rust 2.3 PRE-BETA — compact DJ layout, larger animated jogs, spring pitch-bend faders, larger channel/crossfader controls, eight colored hot cues, nested crates, 3,846 offline color Twemoji icons, lazy folder tree, cover strip and verified online artwork.
           Online artwork is enabled by default. Only artist/album/title and public MusicBrainz IDs are sent to MusicBrainz / Cover Art Archive; no audio or private paths. Disable it in Settings.
           See docs/UPDATE-2.3.md for changes, validation and limitations.
+          ![Current PRE-BETA build — two decks](https://raw.githubusercontent.com/prospektdj/prospektdj/rust-v2.3.0-prebeta.1/docs/screenshots/prebeta-main.png)
+          ![Current PRE-BETA build — four decks](https://raw.githubusercontent.com/prospektdj/prospektdj/rust-v2.3.0-prebeta.1/docs/screenshots/prebeta-four-decks.png)
+
           Open source: AGPL-3.0-or-later. Proprietary Helvetica font is not bundled; select a licensed local file in settings.
 
           - Windows x64: rozpakuj ZIP i uruchom prospekt-dj.exe.
@@ -140,4 +145,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — BETA" --notes-file release-notes.md
+          gh release create "$RELEASE_TAG" release-assets/* docs/screenshots/prebeta-main.png docs/screenshots/prebeta-four-decks.png docs/screenshots/prebeta-small.png docs/screenshots/prebeta-emoji.png --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — PRE-BETA" --notes-file release-notes.md

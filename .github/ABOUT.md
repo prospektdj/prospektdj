@@ -1,5 +1,5 @@
-# Suggested repository About description
+# Repository About description
 
-BETA open source DJ studio written in Rust — Windows and Linux, 2/4 decks, eight hot cues per deck, effects and MIDI controller profiles. AGPL-3.0-or-later.
+PRE-BETA open-source DJ application written in Rust for Windows and Linux. A simple alternative to VirtualDJ, Serato DJ and rekordbox, with 2/4 decks, effects, MIDI, hot cues and a music library. Original application code; openly licensed libraries and artwork. AGPL-3.0-or-later.
 
-The GitHub integration can update files and releases but does not currently have permission to edit the repository's About metadata.
+GitHub returned HTTP 403 (Resource not accessible by integration) when attempting to update the About metadata. Paste the description above into the repository About field using GitHub settings.

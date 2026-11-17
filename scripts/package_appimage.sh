@@ -11,8 +11,8 @@ cp assets/icon.png "$appdir/usr/share/icons/hicolor/512x512/apps/prospekt-dj.png
 cat > "$appdir/usr/share/applications/prospekt-dj.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Prospekt DJ BETA
-Comment=Open source DJ studio — BETA
+Name=Prospekt DJ PRE-BETA
+Comment=Open source DJ studio — PRE-BETA
 Exec=prospekt-dj
 Icon=prospekt-dj
 Terminal=false

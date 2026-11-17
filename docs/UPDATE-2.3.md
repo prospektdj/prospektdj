@@ -1,6 +1,6 @@
-# Prospekt DJ 2.3 BETA — interface and library update
+# Prospekt DJ 2.3 PRE-BETA — interface and library update
 
-This is a BETA release. The implementation follows the supplied update scheme; reference screenshots guide behavior and layout rather than supplying application code.
+This is a PRE-BETA release. The implementation follows the supplied update scheme; reference screenshots guide behavior and layout rather than supplying application code.
 
 ## Decks and cue workflow
 
@@ -36,7 +36,7 @@ Track metadata and small 2×4 cue pads sit toward the outer deck edges; larger j
 
 ## Library table and settings
 
-Graphite zebra rows (`#111111` / `#1B1B1B`), full-row selection/hover, fixed headers and virtual rows improve readability. Columns include favorite, number, title, artist, album, tagged remix/version, genre, BPM, KEY, duration, bitrate and A–D loading controls. Narrow windows have horizontal column scrolling. BPM/time sorts remain numeric. Tagged musical/Camelot keys have a separate harmonic palette; missing keys stay unknown, with no fabricated harmonic analysis. Settings can switch Camelot display and cover strip visibility. Logo, BETA notices, 2/4-deck mode, effects, sampler, recording and existing language settings remain available.
+Graphite zebra rows (`#111111` / `#1B1B1B`), full-row selection/hover, fixed headers and virtual rows improve readability. Columns include favorite, number, title, artist, album, tagged remix/version, genre, BPM, KEY, duration, bitrate and A–D loading controls. Narrow windows have horizontal column scrolling. BPM/time sorts remain numeric. Tagged musical/Camelot keys have a separate harmonic palette; missing keys stay unknown, with no fabricated harmonic analysis. Settings can switch Camelot display and cover strip visibility. Logo, PRE-BETA notices, 2/4-deck mode, effects, sampler, recording and existing language settings remain available.
 
 The performance panel can be resized vertically. At 1280×720 or high scaling, use its vertical scrollbar to access the lower waveforms/effects/decks while retaining room for the library; the **Library** header button expands the browser. This release does not promise that every control fits simultaneously on a small screen.
 

@@ -1,28 +1,28 @@
-# Prospekt DJ — Rust Edition 2.3 BETA
+# Prospekt DJ — Rust Edition 2.3 PRE-BETA
 
-<p align="center"><img src="assets/logo.png" width="640" alt="Prospekt DJ BETA — grapefruit-pink logo" /></p>
+<p align="center"><img src="assets/logo.png" width="640" alt="Prospekt DJ PRE-BETA — grapefruit-pink logo" /></p>
 
 [Polski](#polski) | [English](#english)
 
 ## Polski
 
-**BETA — wersja testowa.** Funkcje i zgodność sprzętowa są nadal sprawdzane. To wydanie nie jest oznaczone jako stabilne.
+**PRE-BETA — wczesna wersja rozwojowa, przed etapem beta.** Funkcje i zgodność sprzętowa są nadal sprawdzane. To wydanie nie jest oznaczone jako stabilne.
 
 **100% własnego kodu aplikacji i testów jest w Rust.** Nie jest to deklaracja, że wszystkie sterowniki systemowe i zewnętrzne kodeki są napisane w Rust. Biblioteki systemowe audio/okien oraz opcjonalny FFmpeg pozostają zewnętrznymi zależnościami.
 
 Licencja projektu: **AGPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budowania znajdują się w paczce źródłowej. Licencje bibliotek są w `licenses/`, a ich lista w `docs/DEPENDENCIES.md`.
 
-## Zrzuty ekranu — 2.3 BETA
+## Zrzuty ekranu — 2.3 PRE-BETA
 
-Natywna aplikacja na Linuxie, demonstracyjne audio i własne testowe okładki. Grafika nie pochodzi z komercyjnych programów DJ.
+Zrzuty z 18 listopada 2026 wykonano z rzeczywistej kompilacji Linux Release **2.3.0-prebeta.1**. [Dane kompilacji](docs/screenshots/build-info.json). Demonstracyjne audio i własne testowe okładki. Grafika nie pochodzi z komercyjnych programów DJ.
 
-![Prospekt DJ 2.3 BETA — jogi, Hot Cue, przebiegi i biblioteka](docs/screenshots/v23-main.png)
+![Prospekt DJ 2.3 PRE-BETA — jogi, Hot Cue, przebiegi i biblioteka](docs/screenshots/prebeta-main.png)
 
-![Prospekt DJ 2.3 BETA — cztery decki](docs/screenshots/v23-four-decks.png)
+![Prospekt DJ 2.3 PRE-BETA — cztery decki](docs/screenshots/prebeta-four-decks.png)
 
-![Prospekt DJ 2.3 BETA — edytor skrzynki z wyborem emoji](docs/screenshots/v23-emoji.png)
+![Prospekt DJ 2.3 PRE-BETA — edytor skrzynki z wyborem emoji](docs/screenshots/prebeta-emoji.png)
 
-## Nowości w 2.3 BETA
+## Nowości w 2.3 PRE-BETA
 
 - Większe ciemne jogi z BPM, tempem i czasami utworu oraz animowaną obręczą zgodną z pozycją nagrania. Pionowy, chwilowy PITCH BEND przy każdym jogu; większe suwaki kanałów i crossfadera. Kompaktowy układ: małe pady po bokach, jogi przy mikserze, przebiegi nad dużą biblioteką i boczny podgląd utworu.
 - Osiem padów Hot Cue w układzie 2×4, wspólna paleta kolorów i klikalne znaczniki na obu przebiegach.
@@ -33,7 +33,7 @@ Natywna aplikacja na Linuxie, demonstracyjne audio i własne testowe okładki. G
 
 [Szczegóły aktualizacji, obsługa i ograniczenia (English)](docs/UPDATE-2.3.md). W małym oknie panel wykonawczy można przewijać i zmieniać jego wysokość; kolumny biblioteki przewijają się poziomo.
 
-## Nowości w 2.2 BETA
+## Nowości w 2.2 PRE-BETA
 
 - Czarne tła paneli, wyśrodkowane logo PROSPEKT DJ, lokalny zegar oraz rzeczywiste wskaźniki CPU i zajętości dysku.
 - Przełącznik 2/4 decków w ustawieniach. Każdy deck ma 8 hot cue; F1–F8 obsługują aktywny deck. Crossfader łączy A/C z B/D; automix używa A/B.
@@ -46,7 +46,7 @@ Natywna aplikacja na Linuxie, demonstracyjne audio i własne testowe okładki. G
 
 **Logo:** domyślnie używana jest nowa grafika w kolorze różowo-grejpfrutowym. Po wyłączeniu opcji „Logo graficzne” można użyć lokalnego, legalnie posiadanego fontu Helvetica Neue 95 Black. Font nie jest dołączany do paczek; tekstowy tryb logo ma otwarty zamiennik DejaVu Sans Bold.
 
-## Zmiany w 2.1 (BETA)
+## Zmiany w 2.1 (PRE-BETA)
 
 - Kompaktowe decki, białe talerze, dwie fale RGB z pasmami rzeczywistego sygnału i zakładki DJ-FX / Samples / Mixer. W wąskim oknie talerze ustępują miejsca kontrolkom.
 - Cztery efekty na deck: filtr LPF/HPF, echo z synchronizacją BPM, reverb i flanger; bypass i sterowanie MIDI.
@@ -55,11 +55,11 @@ Natywna aplikacja na Linuxie, demonstracyjne audio i własne testowe okładki. G
 
 ## Gotowe paczki
 
-Paczki BETA: Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) i Debian/Ubuntu amd64 (.deb) są publikowane w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Sumy kontrolne są w SHA256SUMS.txt. Workflow buduje Windows i Linux, sprawdza archiwa i publikuje pięć paczek po zakończeniu obu zadań.
+Paczki PRE-BETA: Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) i Debian/Ubuntu amd64 (.deb) są publikowane w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Sumy kontrolne są w SHA256SUMS.txt. Workflow buduje Windows i Linux, sprawdza archiwa i publikuje pięć paczek po zakończeniu obu zadań.
 
-Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-beta.1_amd64.deb`. Program pojawi się w menu aplikacji; można też uruchomić `prospekt-dj` w terminalu. Usunięcie: `sudo apt remove prospekt-dj`. Ustawienia w katalogu użytkownika pozostają zachowane. FFmpeg jest zalecany dla dodatkowych formatów nagrywania.
+Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-prebeta.1_amd64.deb`. Program pojawi się w menu aplikacji; można też uruchomić `prospekt-dj` w terminalu. Usunięcie: `sudo apt remove prospekt-dj`. Ustawienia w katalogu użytkownika pozostają zachowane. FFmpeg jest zalecany dla dodatkowych formatów nagrywania.
 
-### AppImage i Flatpak — BETA
+### AppImage i Flatpak — PRE-BETA
 
 AppImage: nadaj plikowi prawa wykonywania (`chmod +x Prospekt-DJ-Rust-*.AppImage`) i uruchom go. Można użyć `APPIMAGE_EXTRACT_AND_RUN=1 ./Prospekt-DJ-Rust-…AppImage`, jeśli system nie ma FUSE.
 
@@ -146,7 +146,7 @@ Utwór wejściowy: do 100 MiB; zdekodowane PCM: do 512 MiB. Sample: plik do 32 M
 
 Paczki z GitHub Releases są kompilowane i testowane automatycznie na runnerach Windows i Linux. Instalacja pakietu .deb jest sprawdzana na Ubuntu. Sprzęt MIDI, fizyczny odsłuch i opóźnienie wymagają sprawdzenia na komputerze docelowym.
 
-Moduły 2.3 BETA: `artwork.rs` (okładki i cache), `folder_tree.rs` (leniwe odczyty folderów), `music_view.rs` (kolory i geometria CUE/tonacji oraz edycja Unicode). Moduły z 2.2 BETA: `controller_import.rs` (deklaratywne mapowania), `i18n.rs` (etykiety językowe), `telemetry.rs` (statystyki systemu), `fonts.rs` (fonty interfejsu).
+Moduły 2.3 PRE-BETA: `artwork.rs` (okładki i cache), `folder_tree.rs` (leniwe odczyty folderów), `music_view.rs` (kolory i geometria CUE/tonacji oraz edycja Unicode). Moduły z 2.2 PRE-BETA: `controller_import.rs` (deklaratywne mapowania), `i18n.rs` (etykiety językowe), `telemetry.rs` (statystyki systemu), `fonts.rs` (fonty interfejsu).
 
 ## Pliki projektu
 
@@ -156,23 +156,23 @@ Moduły 2.3 BETA: `artwork.rs` (okładki i cache), `folder_tree.rs` (leniwe odcz
 
 ## English
 
-**BETA — test release.** Features and hardware compatibility are still being verified. This release is not marked as stable.
+**PRE-BETA — early development release, before beta testing.** Features and hardware compatibility are still being verified. This release is not marked as stable.
 
 **100% of the project's own application and test code is written in Rust.** This does not mean that all system drivers and external codecs are written in Rust. System audio/windowing libraries and optional FFmpeg remain external dependencies.
 
 Project license: **AGPL-3.0-or-later**. Source code, Cargo.lock and build instructions are included in the source package. Dependency licenses are in `licenses/`, with an inventory in `docs/DEPENDENCIES.md`.
 
-### Screenshots — 2.3 BETA
+### Screenshots — 2.3 PRE-BETA
 
-Native Linux application, demo audio and original synthetic cover fixtures. No commercial DJ application's graphics are included.
+Captured on 18 November 2026 from the actual optimized Linux Release build **2.3.0-prebeta.1**. [Build details](docs/screenshots/build-info.json). Demo audio and original synthetic cover fixtures. No commercial DJ application's graphics are included.
 
-![Prospekt DJ 2.3 BETA — jogs, hot cues, waveforms and library](docs/screenshots/v23-main.png)
+![Prospekt DJ 2.3 PRE-BETA — jogs, hot cues, waveforms and library](docs/screenshots/prebeta-main.png)
 
-![Prospekt DJ 2.3 BETA — four decks](docs/screenshots/v23-four-decks.png)
+![Prospekt DJ 2.3 PRE-BETA — four decks](docs/screenshots/prebeta-four-decks.png)
 
-![Prospekt DJ 2.3 BETA — crate editor with emoji picker](docs/screenshots/v23-emoji.png)
+![Prospekt DJ 2.3 PRE-BETA — crate editor with emoji picker](docs/screenshots/prebeta-emoji.png)
 
-### Changes in 2.3 BETA
+### Changes in 2.3 PRE-BETA
 
 - Larger information jogs show effective BPM, pitch and track times; the animated rim follows source position. A vertical spring PITCH BEND fader beside each jog, larger channel faders and crossfader. Compact layout: small outer pads, jogs beside the central mixer, waveforms above a larger library and a track-info sidebar.
 - Eight Hot Cue pads in a 2×4 layout, a shared color palette and clickable markers on both waveforms.
@@ -183,7 +183,7 @@ Native Linux application, demo audio and original synthetic cover fixtures. No c
 
 [Update details, controls and limitations](docs/UPDATE-2.3.md). On small screens the performance panel can be scrolled/resized vertically; library columns scroll horizontally.
 
-### Changes in 2.2 BETA
+### Changes in 2.2 PRE-BETA
 
 - Black panel backgrounds, centered PROSPEKT DJ logo, local clock and real CPU/disk-capacity statistics.
 - A 2/4-deck setting. Each deck has 8 hot cues; F1–F8 control the focused deck. The crossfader routes A/C versus B/D; automix uses A/B.
@@ -196,7 +196,7 @@ Native Linux application, demo audio and original synthetic cover fixtures. No c
 
 **Logo:** the new grapefruit-pink graphic is used by default. Disable “Graphic logo” to use a locally licensed Helvetica Neue 95 Black font file instead. That font is not bundled; text-logo mode has an open DejaVu Sans Bold fallback.
 
-### Changes in 2.1 (BETA)
+### Changes in 2.1 (PRE-BETA)
 
 - Compact decks, white platters, two RGB waveforms showing bands of the actual signal, and DJ-FX / Samples / Mixer tabs. In narrow windows, the platters give way to controls.
 - Four effects per deck: LPF/HPF filter, BPM-synchronized echo, reverb and flanger; bypass and MIDI control.
@@ -205,11 +205,11 @@ Native Linux application, demo audio and original synthetic cover fixtures. No c
 
 ### Ready-to-use packages
 
-BETA Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) and Debian/Ubuntu amd64 (.deb) packages are published in [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Checksums are available in SHA256SUMS.txt. The workflow builds Windows and Linux, verifies the archives and publishes all five packages after both jobs finish.
+PRE-BETA Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) and Debian/Ubuntu amd64 (.deb) packages are published in [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Checksums are available in SHA256SUMS.txt. The workflow builds Windows and Linux, verifies the archives and publishes all five packages after both jobs finish.
 
-Install the DEB on Ubuntu 22.04+ or Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-beta.1_amd64.deb`. The application appears in the applications menu; you can also run `prospekt-dj` in a terminal. Uninstall with `sudo apt remove prospekt-dj`. Settings in your user directory are preserved. FFmpeg is recommended for additional recording formats.
+Install the DEB on Ubuntu 22.04+ or Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-prebeta.1_amd64.deb`. The application appears in the applications menu; you can also run `prospekt-dj` in a terminal. Uninstall with `sudo apt remove prospekt-dj`. Settings in your user directory are preserved. FFmpeg is recommended for additional recording formats.
 
-#### AppImage and Flatpak — BETA
+#### AppImage and Flatpak — PRE-BETA
 
 AppImage: make it executable (`chmod +x Prospekt-DJ-Rust-*.AppImage`) and run it. Use `APPIMAGE_EXTRACT_AND_RUN=1 ./Prospekt-DJ-Rust-…AppImage` if FUSE is unavailable.
 
@@ -296,10 +296,10 @@ Input tracks: up to 100 MiB; decoded PCM: up to 512 MiB. Samples: files up to 32
 
 GitHub Releases packages are built and tested automatically on Windows and Linux runners. DEB installation is verified on Ubuntu. MIDI hardware, physical monitoring and latency require testing on the target computer.
 
-2.3 BETA modules: `artwork.rs` (artwork/cache), `folder_tree.rs` (lazy directory reads), `music_view.rs` (cue/key colors, timeline geometry and Unicode edits). Additional 2.2 BETA modules: `controller_import.rs` (declarative mappings), `i18n.rs` (localized labels), `telemetry.rs` (system statistics), `fonts.rs` (interface fonts).
+2.3 PRE-BETA modules: `artwork.rs` (artwork/cache), `folder_tree.rs` (lazy directory reads), `music_view.rs` (cue/key colors, timeline geometry and Unicode edits). Additional 2.2 PRE-BETA modules: `controller_import.rs` (declarative mappings), `i18n.rs` (localized labels), `telemetry.rs` (system statistics), `fonts.rs` (interface fonts).
 
 ### Project files
 
 `src/ui.rs` — native window and workflows; `engine.rs` — decks, samples, loops and transitions; `audio.rs` — CPAL devices and monitoring; `dsp.rs` — EQ/crossfader; `media.rs` — decoding, metadata and BPM; `midi.rs` — controllers and mappings; `recording.rs` — recording and export; `settings.rs` — local settings. The project contains no application source files in JS/TS/HTML/CSS/C/C++.
 
-Original grapefruit-pink PROSPEKT DJ logo and matching vinyl icon were created for this BETA application. The main header uses the graphic logo by default; a text/font fallback remains available in settings.
+Original grapefruit-pink PROSPEKT DJ logo and matching vinyl icon were created for this PRE-BETA application. The main header uses the graphic logo by default; a text/font fallback remains available in settings.

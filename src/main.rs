@@ -19,7 +19,7 @@ fn main() -> eframe::Result<()> {
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Prospekt DJ · BETA · Rust Edition")
+            .with_title("Prospekt DJ · PRE-BETA · Rust Edition")
             .with_inner_size([settings.width, settings.height])
             .with_min_inner_size([1000., 720.])
             .with_icon(icon),

@@ -1,0 +1,9 @@
+{
+  "version": "2.3.0-prebeta.1",
+  "platform": "Linux x86_64",
+  "profile": "release (optimized)",
+  "screenshot_executable_sha256": "89a9ef2b750a2ca1e23591312301f299174cdee1998666c4de5c5275fe1d4438",
+  "captured_at_utc": "2026-11-17T23:50:40.174176+00:00",
+  "captured_at_warsaw": "2026-11-18T00:50:40.174559+01:00",
+  "note": "Native captures from a local optimized Linux build. CI-produced package binary hashes are listed separately in release SHA256SUMS.txt. Demo audio and original synthetic cover fixtures are illustrative."
+}
