@@ -55,7 +55,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Prospekt DJ <prospektdj@users.noreply.github.com>
 Installed-Size: {(size + 1023) // 1024}
-Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libx11-6, libxkbcommon0, libgl1, xdg-utils, xdg-desktop-portal
+Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libx11-6, libxkbcommon0, libxkbcommon-x11-0, libgl1, xdg-utils, xdg-desktop-portal
 Recommends: ffmpeg
 Homepage: https://github.com/prospektdj/prospektdj
 Description: BETA open source DJ studio written in Rust

@@ -68,7 +68,7 @@ Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, następnie `flat
 
 Windows 10/11 x64: rozpakuj archiwum i uruchom `prospekt-dj.exe`. Nie wymaga Node.js, przeglądarki ani instalowania Rusta. Program nie jest podpisany cyfrowo.
 
-Linux x64 z pulpitem: paczki z GitHub Releases są budowane na Ubuntu 22.04 i wymagają glibc 2.35+ (np. Ubuntu 22.04+ lub Debian 12+). Rozpakuj archiwum i uruchom `./prospekt-dj`. Wymagane są ALSA, X11/XWayland i sterownik OpenGL 3.3 lub zgodny Mesa. Systemowy wybór plików używa XDG Desktop Portal. Na Debianie/Ubuntu potrzebne biblioteki zwykle zapewniają pakiety `libasound2` (w nowszych wydaniach `libasound2t64`), `libx11-6`, `libxkbcommon0`, `libgl1`, `xdg-desktop-portal` i backend portalu odpowiedni dla pulpitu.
+Linux x64 z pulpitem: paczki z GitHub Releases są budowane na Ubuntu 22.04 i wymagają glibc 2.35+ (np. Ubuntu 22.04+ lub Debian 12+). Rozpakuj archiwum i uruchom `./prospekt-dj`. Wymagane są ALSA, X11/XWayland i sterownik OpenGL 3.3 lub zgodny Mesa. Systemowy wybór plików używa XDG Desktop Portal. Na Debianie/Ubuntu potrzebne biblioteki zwykle zapewniają pakiety `libasound2` (w nowszych wydaniach `libasound2t64`), `libx11-6`, `libxkbcommon0`, `libxkbcommon-x11-0`, `libgl1`, `xdg-desktop-portal` i backend portalu odpowiedni dla pulpitu.
 
 Naciśnij **Demo 120 BPM**, następnie uruchom deck A/B. Parametr `--demo` wczytuje demo przy starcie. Pliki lub folder można przeciągać na okno; przy utworze przyciski A/B ładują odpowiedni deck.
 
@@ -217,7 +217,7 @@ Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, then `flatpak ru
 
 Windows 10/11 x64: extract the archive and run `prospekt-dj.exe`. Node.js, a browser and a Rust installation are not required. The application is not digitally signed.
 
-Linux x64 with a desktop: GitHub Releases packages are built on Ubuntu 22.04 and require glibc 2.35+ (for example, Ubuntu 22.04+ or Debian 12+). Extract the archive and run `./prospekt-dj`. ALSA, X11/XWayland and an OpenGL 3.3 driver or compatible Mesa are required. The system file picker uses XDG Desktop Portal. On Debian/Ubuntu, the required libraries are usually provided by `libasound2` (`libasound2t64` on newer releases), `libx11-6`, `libxkbcommon0`, `libgl1`, `xdg-desktop-portal` and the portal backend for your desktop.
+Linux x64 with a desktop: GitHub Releases packages are built on Ubuntu 22.04 and require glibc 2.35+ (for example, Ubuntu 22.04+ or Debian 12+). Extract the archive and run `./prospekt-dj`. ALSA, X11/XWayland and an OpenGL 3.3 driver or compatible Mesa are required. The system file picker uses XDG Desktop Portal. On Debian/Ubuntu, the required libraries are usually provided by `libasound2` (`libasound2t64` on newer releases), `libx11-6`, `libxkbcommon0`, `libxkbcommon-x11-0`, `libgl1`, `xdg-desktop-portal` and the portal backend for your desktop.
 
 Press **Demo 120 BPM**, then start deck A/B. The `--demo` argument loads the demo at startup. You can drag files or a folder onto the window; the A/B buttons next to a track load the corresponding deck.
 
