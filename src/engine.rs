@@ -116,6 +116,7 @@ pub enum DeckControl {
     LoopScale(f64),
     PadMode(PadMode),
     Pad(usize, bool),
+    HotCue(usize, bool),
     Pfl,
     ScratchMode,
     Jog(f64, f64),
@@ -432,6 +433,18 @@ impl Engine {
                 }
             }
             DeckControl::Bend(v) => d.bend = v.clamp(-0.25, 0.25),
+            DeckControl::HotCue(p, erase) if p < 8 => {
+                if let Some(t) = &d.view.track {
+                    if erase {
+                        d.view.hot[p] = None;
+                    } else if let Some(cue) = d.view.hot[p] {
+                        d.frame = cue * t.sample_rate as f64;
+                        d.view.loop_range = None;
+                    } else {
+                        d.view.hot[p] = Some(d.frame / t.sample_rate as f64);
+                    }
+                }
+            }
             DeckControl::Pad(p, erase) if p < 8 => {
                 if d.view.mode != PadMode::HotCue && p >= 4 {
                     return;
@@ -627,7 +640,14 @@ impl Engine {
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             deck_count: self.deck_count,
-            decks: std::array::from_fn(|i| self.decks[i].view.clone()),
+            decks: std::array::from_fn(|i| {
+                let d = &self.decks[i];
+                let mut view = d.view.clone();
+                if let Some(track) = &view.track {
+                    view.position = d.frame / track.sample_rate as f64;
+                }
+                view
+            }),
             cross: self.cross,
             master: self.master,
             phones: self.phones,

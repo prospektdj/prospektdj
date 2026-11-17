@@ -33,7 +33,7 @@ fn search_uses_all_words_across_metadata_and_sort_is_numeric() {
         sort: Sort::Title,
         descending: false,
         favorites: &favorites,
-        loaded: [None, None],
+        loaded: [None; 4],
     };
     assert_eq!(c.visible(&p, &q), vec![0]);
     q.text = "";
@@ -58,7 +58,7 @@ fn scopes_distinguish_folder_boundaries_crates_loaded_and_missing() {
                 sort: Sort::Title,
                 descending: false,
                 favorites: &favorites,
-                loaded: [Some(p[1].as_path()), None],
+                loaded: [Some(p[1].as_path()), None, None, None],
             },
         )
     };

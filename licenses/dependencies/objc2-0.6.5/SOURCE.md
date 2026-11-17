@@ -1,0 +1,3 @@
+Upstream license notices recovered from the published crate commit.
+
+https://github.com/madsmtm/objc2/tree/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df

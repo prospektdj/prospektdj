@@ -1,4 +1,4 @@
-# Prospekt DJ — Rust Edition 2.2 BETA
+# Prospekt DJ — Rust Edition 2.3 BETA
 
 <p align="center"><img src="assets/logo.png" width="640" alt="Prospekt DJ BETA — grapefruit-pink logo" /></p>
 
@@ -12,25 +12,26 @@
 
 Licencja projektu: **AGPL-3.0-or-later**. Źródła, Cargo.lock i instrukcje budowania znajdują się w paczce źródłowej. Licencje bibliotek są w `licenses/`, a ich lista w `docs/DEPENDENCIES.md`.
 
-## Zrzuty ekranu
+## Zrzuty ekranu — 2.3 BETA
 
-Zrzuty natywnej aplikacji na Linuxie, z utworami demonstracyjnymi i przykładową biblioteką.
+Natywna aplikacja na Linuxie, demonstracyjne audio i własne testowe okładki. Grafika nie pochodzi z komercyjnych programów DJ.
 
-**Widok główny BETA — cztery decki, fale RGB, sampler i biblioteka utworów.**
+![Prospekt DJ 2.3 BETA — jogi, Hot Cue, przebiegi i biblioteka](docs/screenshots/v23-main.png)
 
-![Prospekt DJ 2.2 BETA — widok główny z dwoma deckami, samplerem i biblioteką](docs/screenshots/main.png)
+![Prospekt DJ 2.3 BETA — cztery decki](docs/screenshots/v23-four-decks.png)
 
-**DJ-FX BETA — osiem efektów: filtr, echo, reverb, flanger, chorus, tremolo, distortion i bitcrusher.**
+![Prospekt DJ 2.3 BETA — edytor skrzynki z wyborem emoji](docs/screenshots/v23-emoji.png)
 
-![Prospekt DJ 2.2 BETA — panel efektów DJ-FX](docs/screenshots/effects.png)
+## Nowości w 2.3 BETA
 
-**Mixer — korekcja HIGH/MID/LOW i poziomy obu kanałów.**
+- Większe ciemne jogi z BPM, tempem i czasami utworu oraz animowaną obręczą zgodną z pozycją nagrania. Pionowy, chwilowy PITCH BEND przy każdym jogu; większe suwaki kanałów i crossfadera. Kompaktowy układ: małe pady po bokach, jogi przy mikserze, przebiegi nad dużą biblioteką i boczny podgląd utworu.
+- Osiem padów Hot Cue w układzie 2×4, wspólna paleta kolorów i klikalne znaczniki na obu przebiegach.
+- Zagnieżdżone skrzynki, zmiana nazw, wybór emoji i rozwijane drzewo rzeczywistych folderów, ładowane w tle. Nazwy Unicode pozostają zachowane; 3846 kolorowych grafik Twemoji działa offline, także dla obsługiwanych sekwencji ZWJ i odcieni skóry. Licencja grafik: CC BY 4.0; podgląd koloru jest dostępny również w edytorze nazwy.
+- Wirtualizowany pasek okładek zsynchronizowany z tabelą. Automatyczne, ostrożne dopasowanie przez MusicBrainz / Cover Art Archive, pamięć offline i ręczny wybór/odrzucenie grafiki.
+- **Pobieranie okładek jest domyślnie włączone.** Wysyłane są publiczne metadane wykonawcy, albumu i tytułu; audio i prywatne ścieżki pozostają lokalne. Opcję można wyłączyć w ustawieniach ogólnych. Tagi plików nie są zmieniane.
+- Grafitowe naprzemienne wiersze, pełne zaznaczenie, gatunek/wersja utworu i kolory rzeczywistych tonacji z tagów, opcjonalnie w Camelot.
 
-![Prospekt DJ 2.2 BETA — mikser z korekcją i poziomami kanałów](docs/screenshots/mixer.png)
-
-**Ustawienia BETA — profile kontrolerów i zakres zgodności.**
-
-![Prospekt DJ BETA — ustawienia i profile MIDI](docs/screenshots/settings.png)
+[Szczegóły aktualizacji, obsługa i ograniczenia (English)](docs/UPDATE-2.3.md). W małym oknie panel wykonawczy można przewijać i zmieniać jego wysokość; kolumny biblioteki przewijają się poziomo.
 
 ## Nowości w 2.2 BETA
 
@@ -56,13 +57,13 @@ Zrzuty natywnej aplikacji na Linuxie, z utworami demonstracyjnymi i przykładow�
 
 Paczki BETA: Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) i Debian/Ubuntu amd64 (.deb) są publikowane w [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Sumy kontrolne są w SHA256SUMS.txt. Workflow buduje Windows i Linux, sprawdza archiwa i publikuje pięć paczek po zakończeniu obu zadań.
 
-Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_2.2.0-beta.1_amd64.deb`. Program pojawi się w menu aplikacji; można też uruchomić `prospekt-dj` w terminalu. Usunięcie: `sudo apt remove prospekt-dj`. Ustawienia w katalogu użytkownika pozostają zachowane. FFmpeg jest zalecany dla dodatkowych formatów nagrywania.
+Instalacja DEB na Ubuntu 22.04+ lub Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-beta.1_amd64.deb`. Program pojawi się w menu aplikacji; można też uruchomić `prospekt-dj` w terminalu. Usunięcie: `sudo apt remove prospekt-dj`. Ustawienia w katalogu użytkownika pozostają zachowane. FFmpeg jest zalecany dla dodatkowych formatów nagrywania.
 
 ### AppImage i Flatpak — BETA
 
 AppImage: nadaj plikowi prawa wykonywania (`chmod +x Prospekt-DJ-Rust-*.AppImage`) i uruchom go. Można użyć `APPIMAGE_EXTRACT_AND_RUN=1 ./Prospekt-DJ-Rust-…AppImage`, jeśli system nie ma FUSE.
 
-Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, następnie `flatpak run org.prospektdj.ProspektDJ`. Runtime jest pobierany z Flathub. Katalog Muzyka jest dostępny bezpośrednio; inne pliki wybiera się przez portal. Dostęp do urządzeń umożliwia ALSA/MIDI. WAV i AIFF są natywne; pozostałe formaty wymagają wykonywalnego FFmpeg dostępnego wewnątrz środowiska aplikacji.
+Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, następnie `flatpak run org.prospektdj.ProspektDJ`. Runtime jest pobierany z Flathub. Katalog Muzyka jest dostępny bezpośrednio; inne pliki wybiera się przez portal. Dostęp do urządzeń umożliwia ALSA/MIDI. Dostęp sieciowy służy pobieraniu okładek. WAV i AIFF są natywne; pozostałe formaty wymagają wykonywalnego FFmpeg dostępnego wewnątrz środowiska aplikacji.
 
 ## Uruchamianie
 
@@ -145,7 +146,7 @@ Utwór wejściowy: do 100 MiB; zdekodowane PCM: do 512 MiB. Sample: plik do 32 M
 
 Paczki z GitHub Releases są kompilowane i testowane automatycznie na runnerach Windows i Linux. Instalacja pakietu .deb jest sprawdzana na Ubuntu. Sprzęt MIDI, fizyczny odsłuch i opóźnienie wymagają sprawdzenia na komputerze docelowym.
 
-Dodatkowe moduły 2.2 BETA: `controller_import.rs` (deklaratywne mapowania), `i18n.rs` (etykiety językowe), `telemetry.rs` (statystyki systemu), `fonts.rs` (fonty interfejsu).
+Moduły 2.3 BETA: `artwork.rs` (okładki i cache), `folder_tree.rs` (leniwe odczyty folderów), `music_view.rs` (kolory i geometria CUE/tonacji oraz edycja Unicode). Moduły z 2.2 BETA: `controller_import.rs` (deklaratywne mapowania), `i18n.rs` (etykiety językowe), `telemetry.rs` (statystyki systemu), `fonts.rs` (fonty interfejsu).
 
 ## Pliki projektu
 
@@ -161,25 +162,26 @@ Dodatkowe moduły 2.2 BETA: `controller_import.rs` (deklaratywne mapowania), `i1
 
 Project license: **AGPL-3.0-or-later**. Source code, Cargo.lock and build instructions are included in the source package. Dependency licenses are in `licenses/`, with an inventory in `docs/DEPENDENCIES.md`.
 
-### Screenshots
+### Screenshots — 2.3 BETA
 
-Screenshots of the native application on Linux, using demo tracks and a sample music library.
+Native Linux application, demo audio and original synthetic cover fixtures. No commercial DJ application's graphics are included.
 
-**Main view BETA — four decks, RGB waveforms, sampler and music library.**
+![Prospekt DJ 2.3 BETA — jogs, hot cues, waveforms and library](docs/screenshots/v23-main.png)
 
-![Prospekt DJ 2.2 BETA — main view with two decks, sampler and library](docs/screenshots/main.png)
+![Prospekt DJ 2.3 BETA — four decks](docs/screenshots/v23-four-decks.png)
 
-**DJ-FX BETA — eight effects: filter, echo, reverb, flanger, chorus, tremolo, distortion and bitcrusher.**
+![Prospekt DJ 2.3 BETA — crate editor with emoji picker](docs/screenshots/v23-emoji.png)
 
-![Prospekt DJ 2.2 BETA — DJ-FX effects panel](docs/screenshots/effects.png)
+### Changes in 2.3 BETA
 
-**Mixer — HIGH/MID/LOW EQ and levels for both channels.**
+- Larger information jogs show effective BPM, pitch and track times; the animated rim follows source position. A vertical spring PITCH BEND fader beside each jog, larger channel faders and crossfader. Compact layout: small outer pads, jogs beside the central mixer, waveforms above a larger library and a track-info sidebar.
+- Eight Hot Cue pads in a 2×4 layout, a shared color palette and clickable markers on both waveforms.
+- Nested crates, renaming, an emoji picker and a lazy real-folder tree loaded in the background. Unicode names are preserved; 3,846 color Twemoji graphics work offline, including supported ZWJ/skin-tone sequences. Artwork license: CC BY 4.0; the name editor also provides a color preview.
+- A virtualized cover strip synchronized with the table. Conservative automatic matching through MusicBrainz / Cover Art Archive, persistent offline caching and manual selection/rejection of artwork.
+- **Artwork downloads are enabled by default.** Public artist/album/title metadata is sent; audio and private paths stay local. Disable the option in General settings. Music tags are never modified.
+- Graphite zebra rows, full-row selection, genre/version columns and colors for actual tagged keys, optionally displayed in Camelot notation.
 
-![Prospekt DJ 2.2 BETA — mixer with channel EQ and levels](docs/screenshots/mixer.png)
-
-**BETA settings — controller profiles and compatibility details.**
-
-![Prospekt DJ BETA — settings and MIDI profiles](docs/screenshots/settings.png)
+[Update details, controls and limitations](docs/UPDATE-2.3.md). On small screens the performance panel can be scrolled/resized vertically; library columns scroll horizontally.
 
 ### Changes in 2.2 BETA
 
@@ -205,13 +207,13 @@ Screenshots of the native application on Linux, using demo tracks and a sample m
 
 BETA Windows x64 (ZIP), Linux x64 (tar.gz, AppImage, Flatpak) and Debian/Ubuntu amd64 (.deb) packages are published in [GitHub Releases](https://github.com/prospektdj/prospektdj/releases). Checksums are available in SHA256SUMS.txt. The workflow builds Windows and Linux, verifies the archives and publishes all five packages after both jobs finish.
 
-Install the DEB on Ubuntu 22.04+ or Debian 12+: `sudo apt install ./prospekt-dj_2.2.0-beta.1_amd64.deb`. The application appears in the applications menu; you can also run `prospekt-dj` in a terminal. Uninstall with `sudo apt remove prospekt-dj`. Settings in your user directory are preserved. FFmpeg is recommended for additional recording formats.
+Install the DEB on Ubuntu 22.04+ or Debian 12+: `sudo apt install ./prospekt-dj_2.3.0-beta.1_amd64.deb`. The application appears in the applications menu; you can also run `prospekt-dj` in a terminal. Uninstall with `sudo apt remove prospekt-dj`. Settings in your user directory are preserved. FFmpeg is recommended for additional recording formats.
 
 #### AppImage and Flatpak — BETA
 
 AppImage: make it executable (`chmod +x Prospekt-DJ-Rust-*.AppImage`) and run it. Use `APPIMAGE_EXTRACT_AND_RUN=1 ./Prospekt-DJ-Rust-…AppImage` if FUSE is unavailable.
 
-Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, then `flatpak run org.prospektdj.ProspektDJ`. The runtime is downloaded from Flathub. The Music folder is directly accessible; use the file-picker portal for other files. Device access enables ALSA/MIDI. WAV and AIFF are native; additional recording formats require an FFmpeg executable accessible inside the application environment.
+Flatpak: `flatpak install --user ./Prospekt-DJ-Rust-*.flatpak`, then `flatpak run org.prospektdj.ProspektDJ`. The runtime is downloaded from Flathub. The Music folder is directly accessible; use the file-picker portal for other files. Device access enables ALSA/MIDI. Network access supports artwork downloads. WAV and AIFF are native; additional recording formats require an FFmpeg executable accessible inside the application environment.
 
 ### Running the application
 
@@ -294,7 +296,7 @@ Input tracks: up to 100 MiB; decoded PCM: up to 512 MiB. Samples: files up to 32
 
 GitHub Releases packages are built and tested automatically on Windows and Linux runners. DEB installation is verified on Ubuntu. MIDI hardware, physical monitoring and latency require testing on the target computer.
 
-Additional 2.2 BETA modules: `controller_import.rs` (declarative mappings), `i18n.rs` (localized labels), `telemetry.rs` (system statistics), `fonts.rs` (interface fonts).
+2.3 BETA modules: `artwork.rs` (artwork/cache), `folder_tree.rs` (lazy directory reads), `music_view.rs` (cue/key colors, timeline geometry and Unicode edits). Additional 2.2 BETA modules: `controller_import.rs` (declarative mappings), `i18n.rs` (localized labels), `telemetry.rs` (system statistics), `fonts.rs` (interface fonts).
 
 ### Project files
 

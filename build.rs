@@ -55,6 +55,29 @@ fn main() {
         code,
     )
     .unwrap();
+    let emoji_dir = root.join("assets/emoji");
+    let mut icons: Vec<_> = fs::read_dir(&emoji_dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .collect();
+    icons.sort_by_key(|p| p.file_stem().unwrap().to_os_string());
+    let mut atlas = String::from("pub const EMOJI_PNGS: &[(&str,&[u8])] = &[\n");
+    for path in icons {
+        let key = path.file_stem().unwrap().to_string_lossy();
+        atlas.push_str(&format!(
+            "({key:?},include_bytes!({:?})),\n",
+            path.to_string_lossy()
+        ));
+    }
+    atlas.push_str("];\n");
+    fs::write(
+        PathBuf::from(env::var("OUT_DIR").unwrap()).join("emoji_assets.rs"),
+        atlas,
+    )
+    .unwrap();
+    println!("cargo:rerun-if-changed=assets/emoji");
     println!("cargo:rerun-if-changed=licenses");
     println!("cargo:rerun-if-changed=LICENSE");
     println!("cargo:rerun-if-changed=assets/fonts");

@@ -28,6 +28,76 @@ const ACCENTS: [Color32; 4] = [
     Color32::from_rgb(209, 118, 255),
     Color32::from_rgb(244, 164, 69),
 ];
+fn large_fader_style(ui: &mut egui::Ui, accent: Color32) {
+    ui.spacing_mut().interact_size.y = 24.;
+    ui.spacing_mut().slider_rail_height = 2.5;
+    let visuals = ui.visuals_mut();
+    visuals.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
+    visuals.widgets.inactive.bg_fill = Color32::from_gray(95);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1_f32, Color32::from_gray(170));
+    visuals.widgets.hovered.bg_fill = Color32::from_gray(145);
+    visuals.widgets.active.bg_fill = accent;
+}
+fn tree_choice(
+    ui: &mut egui::Ui,
+    emoji: &mut crate::emoji::EmojiAtlas,
+    current: &mut Scope,
+    value: Scope,
+    label: String,
+) -> egui::Response {
+    let (rect, mut response) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width().max(20.), 21.),
+        Sense::click(),
+    );
+    if *current == value || response.hovered() {
+        ui.painter().rect_filled(
+            rect,
+            0.,
+            if *current == value {
+                Color32::from_rgb(35, 64, 79)
+            } else {
+                Color32::from_gray(30)
+            },
+        );
+    }
+    emoji.paint(ui, rect, &label, ui.visuals().text_color());
+    if response.clicked() {
+        *current = value;
+        response.mark_changed();
+    }
+    response.on_hover_text(label)
+}
+fn tree_icon(ui: &mut egui::Ui, color: Color32) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(13., 13.), Sense::hover());
+    ui.painter().rect_filled(
+        egui::Rect::from_min_size(rect.min + egui::vec2(0., 2.), egui::vec2(6., 4.)),
+        1.,
+        color,
+    );
+    ui.painter().rect_filled(
+        egui::Rect::from_min_size(rect.min + egui::vec2(0., 5.), egui::vec2(13., 8.)),
+        1.,
+        color,
+    );
+}
+fn cue_color(n: usize) -> Color32 {
+    let [r, g, b] = prospekt_dj::music_view::CUE_RGB[n];
+    Color32::from_rgb(r, g, b)
+}
+struct CrateEditor {
+    id: Option<u64>,
+    parent: Option<u64>,
+    name: String,
+    cursor: std::ops::Range<usize>,
+}
+struct ArtTexture {
+    texture: egui::TextureHandle,
+    used: u64,
+}
+enum WaveAction {
+    Seek(f64),
+    Cue(usize),
+}
 type LoadAuto = Option<(u64, usize, bool)>;
 enum Work {
     Indexed {
@@ -85,7 +155,13 @@ pub struct Studio {
     db_dirty: bool,
     db_save: Option<(Sender<Catalog>, std::thread::JoinHandle<()>)>,
     index_jobs: usize,
-    new_crate: String,
+    crate_editor: Option<CrateEditor>,
+    folders: prospekt_dj::folder_tree::Folders,
+    artwork: prospekt_dj::artwork::Artwork,
+    art_textures: std::collections::HashMap<String, ArtTexture>,
+    art_status: std::collections::HashMap<String, String>,
+    art_tick: u64,
+    cover_reveal: bool,
     scroll_selected: bool,
     fx_deck: usize,
     selected: usize,
@@ -119,6 +195,9 @@ pub struct Studio {
     last_midi: String,
     outputs: Vec<String>,
     bend: [f64; 4],
+    bend_slider: [f64; 4],
+    bend_buttons: [f64; 4],
+    bend_keys: [f64; 4],
     allow_close: bool,
     had_focus: bool,
     close_confirm: bool,
@@ -126,6 +205,7 @@ pub struct Studio {
     last_save: Instant,
     monitor: prospekt_dj::telemetry::Monitor,
     font_name: String,
+    emoji: crate::emoji::EmojiAtlas,
     brand: crate::brand::Brand,
     license_search: String,
     license_selected: usize,
@@ -200,6 +280,11 @@ impl Studio {
             }
         });
         let dock_tab = settings.dock_tab;
+        let scope = settings.library_scope.clone();
+        let artwork = prospekt_dj::artwork::Artwork::new(
+            settings::config_path().with_file_name("covers"),
+            settings.auto_cover_download,
+        );
         let mut studio = Self {
             settings,
             tx,
@@ -215,14 +300,20 @@ impl Studio {
             library,
             library_set,
             search: String::new(),
-            scope: Scope::All,
+            scope,
             catalog,
             browser_dirty: true,
             visible_rows: Vec::new(),
             db_dirty: false,
             db_save: Some((db_tx, db_thread)),
             index_jobs: 0,
-            new_crate: String::new(),
+            crate_editor: None,
+            folders: Default::default(),
+            artwork,
+            art_textures: Default::default(),
+            art_status: Default::default(),
+            art_tick: 0,
+            cover_reveal: false,
             scroll_selected: false,
             fx_deck: 0,
             selected: 0,
@@ -256,6 +347,9 @@ impl Studio {
             last_midi: String::new(),
             outputs: Vec::new(),
             bend: [0.; 4],
+            bend_slider: [0.; 4],
+            bend_buttons: [0.; 4],
+            bend_keys: [0.; 4],
             allow_close: false,
             had_focus: true,
             close_confirm: false,
@@ -263,6 +357,7 @@ impl Studio {
             last_save: Instant::now(),
             monitor: prospekt_dj::telemetry::Monitor::new(settings::config_path()),
             font_name,
+            emoji: Default::default(),
             brand: crate::brand::Brand::load(&cc.egui_ctx),
             license_search: String::new(),
             license_selected: 0,
@@ -485,6 +580,60 @@ impl Studio {
         }
     }
     fn poll(&mut self, ctx: &egui::Context) {
+        self.folders.poll();
+        self.art_tick = self.art_tick.wrapping_add(1);
+        for event in self.artwork.poll() {
+            if let Some(image) = event.image {
+                let texture = ctx.load_texture(
+                    format!("art-{}", event.key),
+                    egui::ColorImage::from_rgba_unmultiplied(image.size, &image.rgba),
+                    Default::default(),
+                );
+                self.art_textures.insert(
+                    event.key.clone(),
+                    ArtTexture {
+                        texture,
+                        used: self.art_tick,
+                    },
+                );
+            } else {
+                self.art_textures.remove(&event.key);
+            }
+            self.art_status.insert(event.key, event.status);
+        }
+        while self.art_textures.len() > 128 {
+            if let Some(key) = self
+                .art_textures
+                .iter()
+                .min_by_key(|(_, t)| t.used)
+                .map(|(k, _)| k.clone())
+            {
+                self.art_textures.remove(&key);
+                self.artwork.forget(&key);
+            } else {
+                break;
+            }
+        }
+        if self.art_status.len() > 4096 {
+            self.art_status.clear();
+        }
+        for i in 0..self.settings.deck_count {
+            if let Some(path) = self.snapshot.decks[i]
+                .track
+                .as_ref()
+                .and_then(|t| t.path.as_ref())
+            {
+                if let Some(entry) = self.catalog.entries.get(path) {
+                    let entry = entry.clone();
+                    self.artwork.request(&entry);
+                    let key = prospekt_dj::artwork::identity(&entry);
+                    self.covers[i] = self.art_textures.get_mut(&key).map(|art| {
+                        art.used = self.art_tick;
+                        art.texture.clone()
+                    });
+                }
+            }
+        }
         if let Ok(view) = self.shared.try_lock() {
             for i in 0..4 {
                 if view.decks[i].track.as_ref().and_then(|t| t.path.as_ref())
@@ -560,7 +709,7 @@ impl Studio {
                                 self.browser_dirty = true;
                                 self.db_dirty = true;
                             }
-                            self.covers[deck] = cover(ctx, deck, track.cover.as_deref());
+                            self.covers[deck] = None;
                             self.status = format!("{} → deck {}", track.title, letter(deck));
                             self.send(Command::Deck(deck, DeckControl::Load(track)));
                             if let Some((_, index, first)) = auto {
@@ -850,6 +999,7 @@ impl Studio {
         }
     }
     fn persist(&mut self) {
+        self.settings.library_scope = self.scope.clone();
         self.settings.dock_tab = self.dock_tab;
         self.settings.library = self.library.clone();
         self.settings.effects = self.snapshot.decks.iter().map(|d| d.fx).collect();
@@ -899,19 +1049,19 @@ impl Studio {
                     } else {
                         Color32::BLACK
                     })
-                    .inner_margin(8),
+                    .inner_margin(5),
             )
             .show(ctx, |ui| {
                 let rect = ui.available_rect_before_wrap();
                 ui.allocate_ui_with_layout(
-                    Vec2::new(rect.width(), 56.),
+                    Vec2::new(rect.width(), 35.),
                     egui::Layout::left_to_right(Align::Center),
                     |ui| {
                         ui.vertical(|ui| {
                             ui.label(
                                 RichText::new(chrono::Local::now().format("%H:%M:%S").to_string())
                                     .monospace()
-                                    .size(16.),
+                                    .size(13.),
                             );
                             ui.label(
                                 RichText::new(format!(
@@ -953,9 +1103,9 @@ impl Studio {
                     },
                 );
                 if self.settings.graphic_logo {
-                    let size = Vec2::new(37. * self.brand.aspect, 37.);
+                    let size = Vec2::new(25. * self.brand.aspect, 25.);
                     let destination = egui::Rect::from_center_size(
-                        egui::pos2(rect.center().x, rect.top() + 20.),
+                        egui::pos2(rect.center().x, rect.top() + 12.),
                         size,
                     );
                     ui.painter().image(
@@ -966,7 +1116,7 @@ impl Studio {
                     );
                 } else {
                     ui.painter().text(
-                        egui::pos2(rect.center().x, rect.top() + 20.),
+                        egui::pos2(rect.center().x, rect.top() + 12.),
                         egui::Align2::CENTER_CENTER,
                         "PROSPEKT DJ",
                         FontId::new(24., egui::FontFamily::Name("logo".into())),
@@ -974,9 +1124,9 @@ impl Studio {
                     );
                 }
                 ui.painter().text(
-                    egui::pos2(rect.center().x, rect.top() + 47.),
+                    egui::pos2(rect.center().x, rect.top() + 32.),
                     egui::Align2::CENTER_CENTER,
-                    "OPEN SOURCE · 2.2 BETA",
+                    format!("OPEN SOURCE · {} · BETA", env!("CARGO_PKG_VERSION")),
                     FontId::proportional(9.),
                     Color32::from_rgb(255, 99, 135),
                 );
@@ -986,7 +1136,7 @@ impl Studio {
         });
     }
     fn decks_ui(&mut self, ui: &mut egui::Ui) {
-        let middle = 148.;
+        let middle = 172.;
         let width = ((ui.available_width() - middle - 12.) / 2.).max(300.);
         for row in 0..self.settings.deck_count / 2 {
             ui.horizontal_top(|ui| {
@@ -1028,14 +1178,18 @@ impl Studio {
                 ui,
                 &view,
                 *accent,
-                if self.settings.deck_count == 4 {
-                    36.
-                } else {
-                    57.
+                match (
+                    self.settings.deck_count == 4,
+                    ui.ctx().screen_rect().height() < 850.,
+                ) {
+                    (true, true) => 24.,
+                    (true, false) => 36.,
+                    (false, true) => 30.,
+                    _ => 45.,
                 },
                 Some(self.zoom),
             ) {
-                self.deck(i, DeckControl::Seek(pos));
+                self.wave_action(i, pos);
             }
         }
     }
@@ -1056,10 +1210,10 @@ impl Studio {
             ))
             .show(ui, |ui| {
                 let show_platter = ui.ctx().screen_rect().width() >= 1200.;
-                let info = (ui.available_width() - if show_platter { 112. } else { 0. }).max(180.);
+                let info = (ui.available_width() - if show_platter { 192. } else { 0. }).max(180.);
                 ui.horizontal_top(|ui| {
                     if show_platter && i % 2 == 1 {
-                        self.white_platter(ui, i, &d);
+                        self.jog_panel(ui, i, &d);
                     }
                     ui.allocate_ui_with_layout(
                         Vec2::new(info, 0.),
@@ -1070,30 +1224,193 @@ impl Studio {
                         },
                     );
                     if show_platter && i.is_multiple_of(2) {
-                        self.white_platter(ui, i, &d);
+                        self.jog_panel(ui, i, &d);
                     }
                 });
             });
     }
-    fn white_platter(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
-        let (response, p) = ui.allocate_painter(Vec2::new(106., 142.), Sense::click_and_drag());
-        let center = response.rect.center();
-        p.circle_filled(center, 51., Color32::from_gray(8));
-        p.circle_filled(center, 45., Color32::from_gray(235));
-        p.circle_stroke(center, 45., Stroke::new(5_f32, Color32::from_gray(145)));
-        let angle = d.position as f32 * std::f32::consts::PI
-            + if i == 0 { std::f32::consts::PI } else { -0.7 };
-        p.line_segment(
-            [center, center + Vec2::angled(angle) * 39.],
-            Stroke::new(7_f32, Color32::BLACK),
+    fn wave_action(&mut self, i: usize, action: WaveAction) {
+        match action {
+            WaveAction::Seek(pos) => self.deck(i, DeckControl::Seek(pos)),
+            WaveAction::Cue(n) => self.deck(i, DeckControl::HotCue(n, false)),
+        }
+    }
+    fn jog_panel(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
+        ui.allocate_ui_with_layout(
+            Vec2::new(186., 174.),
+            egui::Layout::top_down(Align::Min),
+            |ui| {
+                ui.horizontal_top(|ui| {
+                    if i.is_multiple_of(2) {
+                        self.pitch_bend(ui, i);
+                    }
+                    self.white_platter(ui, i, d);
+                    if i % 2 == 1 {
+                        self.pitch_bend(ui, i);
+                    }
+                });
+            },
         );
-        p.circle_filled(center, 7., Color32::from_gray(181));
+    }
+    fn pitch_bend(&mut self, ui: &mut egui::Ui, i: usize) {
+        ui.allocate_ui_with_layout(
+            Vec2::new(32., 174.),
+            egui::Layout::top_down(Align::Center),
+            |ui| {
+                ui.set_width(32.);
+                ui.spacing_mut().item_spacing.y = 2.;
+                ui.label(RichText::new("PITCH").size(7.).weak());
+                ui.label(RichText::new("BEND").size(8.).color(ACCENTS[i]));
+                let mut value = self.bend_slider[i] * 100.;
+                ui.spacing_mut().slider_width = 112.;
+                let response = egui::Frame::new()
+                    .fill(Color32::from_gray(27))
+                    .stroke(Stroke::new(1_f32, Color32::from_gray(70)))
+                    .corner_radius(1)
+                    .inner_margin(3)
+                    .show(ui, |ui| {
+                        ui.visuals_mut().widgets.inactive.bg_stroke =
+                            Stroke::new(1_f32, Color32::from_gray(165));
+                        ui.add(
+                            egui::Slider::new(&mut value, -8.0..=8.)
+                                .vertical()
+                                .show_value(false),
+                        )
+                    })
+                    .inner;
+                self.bend_slider[i] = if response.is_pointer_button_down_on() || response.dragged()
+                {
+                    value / 100.
+                } else {
+                    0.
+                };
+                if response.double_clicked() {
+                    self.bend_slider[i] = 0.;
+                }
+                response.on_hover_text("Momentary pitch bend ±8% · returns to zero on release");
+                ui.label(
+                    RichText::new(format!("{:+.0}%", self.bend_slider[i] * 100.))
+                        .monospace()
+                        .size(8.),
+                );
+            },
+        );
+    }
+    fn apply_bends(&mut self, ctx: &egui::Context) {
+        let (mouse, focused) = ctx.input(|input| (input.pointer.primary_down(), input.focused));
+        for i in 0..4 {
+            let value = prospekt_dj::music_view::momentary_bend(
+                self.bend_slider[i],
+                self.bend_buttons[i],
+                self.bend_keys[i],
+                mouse && !self.library_focus,
+                focused && i < self.settings.deck_count,
+            );
+            if !mouse || !focused || self.library_focus || i >= self.settings.deck_count {
+                self.bend_slider[i] = 0.;
+                self.bend_buttons[i] = 0.;
+            }
+            if value != self.bend[i] {
+                self.stop_auto();
+                self.send(Command::Deck(i, DeckControl::Bend(value)));
+                self.bend[i] = value;
+            }
+        }
+    }
+    fn white_platter(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
+        let (response, p) = ui.allocate_painter(Vec2::new(148., 174.), Sense::click_and_drag());
+        let center = egui::pos2(response.rect.center().x, response.rect.top() + 75.);
+        let text = if self.settings.light {
+            Color32::BLACK
+        } else {
+            Color32::from_gray(235)
+        };
+        p.circle_filled(center, 72., Color32::from_gray(35));
+        p.circle_filled(
+            center,
+            65.,
+            if self.settings.light {
+                Color32::from_gray(228)
+            } else {
+                Color32::from_gray(12)
+            },
+        );
+        p.circle_stroke(center, 66., Stroke::new(1_f32, Color32::from_gray(70)));
+        if d.track.is_some() {
+            let angle = d.position as f32 * std::f32::consts::PI - std::f32::consts::FRAC_PI_2;
+            for n in 0..24 {
+                let theta = angle + n as f32 * std::f32::consts::TAU / 24.;
+                p.line_segment(
+                    [
+                        center + Vec2::angled(theta) * 68.,
+                        center + Vec2::angled(theta) * 71.,
+                    ],
+                    Stroke::new(1_f32, Color32::from_gray(if n % 3 == 0 { 140 } else { 65 })),
+                );
+            }
+            let arc: Vec<_> = (0..16)
+                .map(|n| center + Vec2::angled(angle + n as f32 * 0.05) * 69.5)
+                .collect();
+            p.add(egui::Shape::line(arc, Stroke::new(2_f32, ACCENTS[i])));
+            p.line_segment(
+                [
+                    center + Vec2::angled(angle) * 64.,
+                    center + Vec2::angled(angle) * 72.,
+                ],
+                Stroke::new(3_f32, ACCENTS[i]),
+            );
+        }
+        for (dy, label, size, color) in [
+            (
+                -23.,
+                if d.track.is_some() {
+                    format!("{:.2}", d.bpm * d.rate * (1. + self.bend[i]))
+                } else {
+                    "—".into()
+                },
+                24.,
+                text,
+            ),
+            (
+                -3.,
+                format!("{:+.1}%   ±50%", (d.rate - 1.) * 100.),
+                10.,
+                text,
+            ),
+            (
+                15.,
+                if d.track.is_some() {
+                    short_time(d.position)
+                } else {
+                    "—:—".into()
+                },
+                16.,
+                text,
+            ),
+            (
+                32.,
+                d.track
+                    .as_ref()
+                    .map(|t| format!("−{}", short_time((t.duration() - d.position).max(0.))))
+                    .unwrap_or_else(|| "—:—".into()),
+                13.,
+                Color32::GRAY,
+            ),
+        ] {
+            p.text(
+                center + egui::vec2(0., dy),
+                egui::Align2::CENTER_CENTER,
+                label,
+                FontId::monospace(size),
+                color,
+            );
+        }
         p.text(
-            egui::pos2(center.x, response.rect.bottom() - 3.),
-            egui::Align2::CENTER_BOTTOM,
+            egui::pos2(center.x, response.rect.top() + 161.),
+            egui::Align2::CENTER_CENTER,
             if d.scratch { "VINYL" } else { "JOG / BEND" },
-            FontId::monospace(8.),
-            Color32::GRAY,
+            FontId::monospace(9.),
+            ACCENTS[i],
         );
         if response.drag_started() {
             self.stop_auto();
@@ -1134,15 +1451,16 @@ impl Studio {
             {
                 self.focused = i;
             }
-            if let Some(pos) = waveform(ui, d, accent, 17., None) {
-                self.deck(i, DeckControl::Seek(pos));
+            if let Some(action) = waveform(ui, d, accent, 22., None) {
+                self.wave_action(i, action);
             }
         });
         ui.horizontal(|ui| {
             if let Some(texture) = &self.covers[i] {
-                ui.image((texture.id(), Vec2::splat(22.)));
+                ui.image((texture.id(), Vec2::splat(30.)));
             }
             ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.;
                 ui.add(
                     egui::Label::new(
                         RichText::new(
@@ -1171,55 +1489,28 @@ impl Studio {
                                 .unwrap_or("MP3 / WAV / FLAC / AAC / OGG"),
                         )
                         .size(11.)
-                        .strong(),
+                        .weak(),
                     )
                     .truncate(),
                 );
             });
         });
         ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!("{:.1}", d.bpm * d.rate))
-                    .monospace()
-                    .size(20.)
-                    .strong()
-                    .color(accent),
-            );
-            ui.label(RichText::new("BPM").size(8.).weak());
-            if let Some(key) = d
-                .track
-                .as_ref()
-                .and_then(|t| t.path.as_ref())
-                .and_then(|p| self.catalog.entries.get(p))
-                .map(|e| e.key.as_str())
-                .filter(|k| !k.is_empty())
-            {
-                ui.label(RichText::new(key).color(accent).strong());
-            }
-            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                ui.label(
-                    RichText::new(time(d.position))
-                        .monospace()
-                        .size(19.)
-                        .strong()
-                        .color(accent),
-                );
-                ui.label(RichText::new("ELAPSED").size(8.).weak());
-            });
-        });
-        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.;
             if ui
                 .add_sized(
-                    [46., 22.],
+                    [32., 21.],
                     egui::Button::new(
-                        RichText::new(if d.playing { "II" } else { ">" })
-                            .strong()
-                            .color(if d.playing { Color32::BLACK } else { accent }),
+                        RichText::new(if d.playing { "II" } else { "▶" }).color(if d.playing {
+                            Color32::BLACK
+                        } else {
+                            accent
+                        }),
                     )
                     .fill(if d.playing {
                         Color32::from_rgb(99, 198, 126)
                     } else {
-                        Color32::BLACK
+                        Color32::from_gray(12)
                     }),
                 )
                 .clicked()
@@ -1233,101 +1524,100 @@ impl Studio {
                 self.sync(i);
             }
             let mut bpm = d.bpm;
-            if ui
-                .add(
-                    egui::DragValue::new(&mut bpm)
-                        .range(40.0..=300.)
-                        .speed(0.1)
-                        .max_decimals(1),
-                )
-                .changed()
-            {
+            let response = ui.add(
+                egui::DragValue::new(&mut bpm)
+                    .range(40.0..=300.)
+                    .speed(0.1)
+                    .max_decimals(1),
+            );
+            if response.changed() {
                 self.deck(i, DeckControl::Bpm(bpm));
             }
-            if ui.small_button("TAP").clicked() {
-                self.tap(i);
-            }
-            if ui.small_button("BPM?").clicked() {
-                self.analyse(i);
-            }
-            ui.spacing_mut().slider_width = 62.;
-            let mut rate = (d.rate - 1.) * 100.;
-            let r = ui.add(egui::Slider::new(&mut rate, -50.0..=50.).show_value(false));
-            if r.changed() {
-                self.deck(i, DeckControl::Rate(1. + rate / 100.));
-            }
-            if r.double_clicked() {
-                self.deck(i, DeckControl::Rate(1.));
-            }
-            ui.label(RichText::new(format!("{rate:+.1}%")).monospace().size(10.));
-        });
-        ui.horizontal_wrapped(|ui| {
-            let mut mode = d.mode;
-            egui::ComboBox::from_id_salt(("pads", i))
-                .width(78.)
-                .selected_text(RichText::new(mode_label(mode)).size(9.))
-                .show_ui(ui, |ui| {
-                    for option in PadMode::ALL {
-                        ui.selectable_value(&mut mode, option, mode_label(option));
+            response
+                .on_hover_text("BPM · Right-click: TAP / analyze / ×2 / ÷2")
+                .context_menu(|ui| {
+                    if ui.button("TAP").clicked() {
+                        self.tap(i);
+                    }
+                    if ui.button("Analyze BPM").clicked() {
+                        self.analyse(i);
+                        ui.close_menu();
+                    }
+                    if ui.button("×2").clicked() {
+                        self.deck(i, DeckControl::Bpm(d.bpm * 2.));
+                        ui.close_menu();
+                    }
+                    if ui.button("÷2").clicked() {
+                        self.deck(i, DeckControl::Bpm(d.bpm / 2.));
+                        ui.close_menu();
                     }
                 });
-            if mode != d.mode {
-                self.deck(i, DeckControl::PadMode(mode));
+            ui.spacing_mut().slider_width = 54.;
+            let mut pitch = (d.rate - 1.) * 100.;
+            let response = ui.add(egui::Slider::new(&mut pitch, -50.0..=50.).show_value(false));
+            if response.changed() {
+                self.deck(i, DeckControl::Rate(1. + pitch / 100.));
             }
-            for p in 0..if mode == PadMode::HotCue { 8 } else { 4 } {
-                let active = if mode == PadMode::HotCue {
-                    d.hot[p].is_some()
-                } else if mode == PadMode::Sampler {
-                    self.snapshot.samples[p].is_some()
-                } else {
-                    false
-                };
-                let color = [
-                    Color32::from_rgb(183, 69, 58),
-                    Color32::from_rgb(179, 106, 42),
-                    Color32::from_rgb(55, 105, 173),
-                    Color32::from_rgb(175, 153, 48),
-                ][p % 4];
-                let label = if mode == PadMode::ManualLoop {
-                    ["IN", "OUT", "OFF", "RE"][p].into()
-                } else {
-                    format!("{}", p + 1)
-                };
-                if ui
-                    .add_sized(
-                        [23., 20.],
-                        egui::Button::new(RichText::new(label).size(10.)).fill(if active {
-                            color
-                        } else {
-                            color.gamma_multiply(0.35)
-                        }),
-                    )
-                    .clicked()
-                {
-                    self.deck(
-                        i,
-                        DeckControl::Pad(p, ui.input(|input| input.modifiers.shift)),
-                    );
-                }
+            if response.double_clicked() {
+                self.deck(i, DeckControl::Rate(1.));
             }
-            ui.label(RichText::new("LOOP").size(8.).weak());
-            for beats in [1., 2., 4., 8.] {
-                if ui
-                    .selectable_label(
-                        d.loop_range
-                            .is_some_and(|(a, b)| ((b - a) * d.bpm / 60. - beats).abs() < 0.05),
-                        format!("{}", beats as u8),
-                    )
-                    .clicked()
-                {
-                    self.deck(i, DeckControl::Loop(beats));
-                }
-            }
-            if ui.small_button("OFF").clicked() {
-                self.deck(i, DeckControl::LoopOff);
-            }
+            ui.label(RichText::new(format!("{pitch:+.1}%")).size(10.).monospace());
         });
-        ui.horizontal_wrapped(|ui| {
+        let controls = 98.;
+        let pads = (ui.available_width() - controls - 6.).clamp(172., 268.);
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(
+                Vec2::new(pads, 60.),
+                egui::Layout::top_down(Align::Min),
+                |ui| {
+                    ui.set_width(pads);
+                    self.cue_pads(ui, i, d);
+                },
+            );
+            ui.allocate_ui_with_layout(
+                Vec2::new(controls, 60.),
+                egui::Layout::top_down(Align::Min),
+                |ui| {
+                    ui.set_width(controls);
+                    ui.spacing_mut().item_spacing = egui::vec2(3., 2.);
+                    let mut mode = d.mode;
+                    egui::ComboBox::from_id_salt(("pads", i))
+                        .width(90.)
+                        .selected_text(RichText::new(mode_label(mode)).size(9.))
+                        .show_ui(ui, |ui| {
+                            for option in PadMode::ALL {
+                                ui.selectable_value(&mut mode, option, mode_label(option));
+                            }
+                        });
+                    if mode != d.mode {
+                        self.deck(i, DeckControl::PadMode(mode));
+                    }
+                    ui.horizontal(|ui| {
+                        for beats in [1., 2., 4., 8.] {
+                            if ui
+                                .selectable_label(
+                                    d.loop_range.is_some_and(|(a, b)| {
+                                        ((b - a) * d.bpm / 60. - beats).abs() < 0.05
+                                    }),
+                                    format!("{}", beats as u8),
+                                )
+                                .clicked()
+                            {
+                                self.deck(i, DeckControl::Loop(beats));
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("LOOP").size(8.).weak());
+                        if ui.small_button("OFF").clicked() {
+                            self.deck(i, DeckControl::LoopOff);
+                        }
+                    });
+                },
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.;
             if ui.small_button("SET CUE").clicked() {
                 self.deck(i, DeckControl::SetCue);
             }
@@ -1346,38 +1636,98 @@ impl Studio {
             } else {
                 0.
             };
-            if amount != self.bend[i] {
-                self.stop_auto();
-                self.send(Command::Deck(i, DeckControl::Bend(amount)));
-                self.bend[i] = amount;
+            self.bend_buttons[i] = amount;
+            if let Some(key) = d
+                .track
+                .as_ref()
+                .and_then(|t| t.path.as_ref())
+                .and_then(|p| self.catalog.entries.get(p))
+                .map(|e| e.key.as_str())
+                .filter(|k| !k.is_empty())
+            {
+                ui.label(RichText::new(key).size(10.).color(accent));
             }
-            if ui.small_button("×2").clicked() {
-                self.deck(i, DeckControl::Bpm(d.bpm * 2.));
-            }
-            if ui.small_button("÷2").clicked() {
-                self.deck(i, DeckControl::Bpm(d.bpm / 2.));
-            }
-            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                ui.label(
-                    RichText::new(format!(
-                        "−{}",
-                        time(
-                            d.track
-                                .as_ref()
-                                .map(|t| t.duration() - d.position)
-                                .unwrap_or(0.)
-                        )
-                    ))
-                    .monospace()
-                    .size(10.)
-                    .weak(),
-                );
-            });
         });
+    }
+    fn cue_pads(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
+        if d.mode != PadMode::HotCue {
+            ui.horizontal_wrapped(|ui| {
+                for p in 0..4 {
+                    let label = if d.mode == PadMode::ManualLoop {
+                        ["IN", "OUT", "OFF", "RE"][p].to_owned()
+                    } else {
+                        (p + 1).to_string()
+                    };
+                    if ui.add_sized([38., 25.], egui::Button::new(label)).clicked() {
+                        self.deck(i, DeckControl::Pad(p, ui.input(|v| v.modifiers.shift)));
+                    }
+                }
+            });
+            return;
+        }
+        let gap = 3.;
+        let width = ((ui.available_width() - 3. * gap) / 4.).clamp(40., 64.);
+        for row in 0..2 {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for col in 0..4 {
+                    let n = row * 4 + col;
+                    let color = cue_color(n);
+                    let active = d.hot[n].is_some();
+                    let (rect, response) =
+                        ui.allocate_exact_size(Vec2::new(width, 28.), Sense::click());
+                    let fill = if response.is_pointer_button_down_on() {
+                        color.gamma_multiply(0.4)
+                    } else if response.hovered() {
+                        Color32::from_gray(35)
+                    } else {
+                        Color32::from_gray(if active { 17 } else { 8 })
+                    };
+                    ui.painter().rect_filled(rect, 1., fill);
+                    ui.painter().rect_stroke(
+                        rect.shrink(0.5),
+                        1.,
+                        Stroke::new(1_f32, color.gamma_multiply(if active { 1. } else { 0.35 })),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_max(
+                            egui::pos2(rect.left(), rect.bottom() - 3.),
+                            rect.right_bottom(),
+                        ),
+                        0.,
+                        color.gamma_multiply(if active { 1. } else { 0.25 }),
+                    );
+                    ui.painter().text(
+                        rect.center() - egui::vec2(0., 6.),
+                        egui::Align2::CENTER_CENTER,
+                        format!("Cue {}", n + 1),
+                        FontId::proportional(10.),
+                        if active {
+                            Color32::WHITE
+                        } else {
+                            Color32::GRAY
+                        },
+                    );
+                    ui.painter().text(
+                        rect.center() + egui::vec2(0., 5.),
+                        egui::Align2::CENTER_CENTER,
+                        d.hot[n].map(short_time).unwrap_or_else(|| "—:—".into()),
+                        FontId::monospace(9.),
+                        color,
+                    );
+                    if response.clicked() {
+                        self.deck(i, DeckControl::HotCue(n, ui.input(|v| v.modifiers.shift)));
+                    }
+                    response.on_hover_text("Click: set / recall · Shift+click: erase");
+                }
+            });
+        }
     }
     fn mini_mixer(&mut self, ui: &mut egui::Ui, start: usize) {
         let s = self.snapshot.clone();
         ui.vertical_centered(|ui| {
+            ui.spacing_mut().item_spacing.y = 2.;
             ui.label(
                 RichText::new(if start == 0 {
                     "MASTER / MONITOR"
@@ -1388,12 +1738,13 @@ impl Studio {
                 .weak(),
             );
             ui.horizontal(|ui| {
-                ui.add_space(((ui.available_width() - 80.) / 2.).max(0.));
+                ui.add_space(((ui.available_width() - 92.) / 2.).max(0.));
                 for (i, accent) in ACCENTS.iter().enumerate().skip(start).take(2) {
                     ui.vertical(|ui| {
                         ui.label(RichText::new(letter(i)).size(9.).color(*accent));
                         ui.horizontal(|ui| {
-                            ui.spacing_mut().slider_width = 61.;
+                            ui.spacing_mut().slider_width = 88.;
+                            large_fader_style(ui, *accent);
                             let mut volume = s.decks[i].volume;
                             if ui
                                 .add(
@@ -1405,7 +1756,7 @@ impl Studio {
                             {
                                 self.send(Command::Deck(i, DeckControl::Volume(volume)));
                             }
-                            meter(ui, s.decks[i].level, *accent, 63.);
+                            meter(ui, s.decks[i].level, *accent, 90.);
                         });
                     });
                 }
@@ -1423,7 +1774,7 @@ impl Studio {
                             .default(0.75)
                             .label("MASTER")
                             .unit("%")
-                            .size(18.),
+                            .size(16.),
                     )
                     .changed()
                 {
@@ -1436,18 +1787,19 @@ impl Studio {
                             .default(0.7)
                             .label("PHONES")
                             .unit("%")
-                            .size(18.),
+                            .size(16.),
                     )
                     .changed()
                 {
                     self.send(Command::Phones(phones));
                 }
             });
-            ui.spacing_mut().slider_width = 114.;
+            ui.spacing_mut().slider_width = 156.;
             let mut cross = s.cross;
             let r = ui
                 .horizontal(|ui| {
-                    ui.add_space(((ui.available_width() - 114.) / 2.).max(0.));
+                    ui.add_space(((ui.available_width() - 156.) / 2.).max(0.));
+                    large_fader_style(ui, ACCENTS[0]);
                     ui.add(egui::Slider::new(&mut cross, 0.0..=1.).show_value(false))
                 })
                 .inner;
@@ -1462,7 +1814,7 @@ impl Studio {
             let recording = self.record_result.is_some();
             let response = ui
                 .add_enabled_ui(!self.record_stopping, |ui| {
-                    let (rect, response) = ui.allocate_exact_size(Vec2::splat(24.), Sense::click());
+                    let (rect, response) = ui.allocate_exact_size(Vec2::splat(20.), Sense::click());
                     let red = if response.hovered() {
                         Color32::from_rgb(255, 85, 85)
                     } else {
@@ -1960,6 +2312,7 @@ impl Studio {
                 },
             );
             self.browser_dirty = false;
+            self.cover_reveal = true;
             if !self.visible_rows.contains(&self.selected) {
                 if let Some(first) = self.visible_rows.first() {
                     self.selected = *first;
@@ -2005,7 +2358,10 @@ impl Studio {
         ui.separator();
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
-                Vec2::new(172., ui.available_height() - 52.),
+                Vec2::new(
+                    self.settings.tree_width.clamp(150., 400.),
+                    ui.available_height() - 52.,
+                ),
                 egui::Layout::top_down(Align::Min),
                 |ui| {
                     let height = (ui.available_height() - 4.).max(100.);
@@ -2016,15 +2372,136 @@ impl Studio {
                         .show(ui, |ui| self.browser_sidebar(ui));
                 },
             );
-            ui.separator();
-            ui.vertical(|ui| {
-                ui.set_min_width(ui.available_width());
-                self.browser_table(ui);
-            });
+            let (handle, response) = ui.allocate_exact_size(
+                Vec2::new(5., ui.available_height().max(100.)),
+                Sense::drag(),
+            );
+            ui.painter().line_segment(
+                [handle.center_top(), handle.center_bottom()],
+                Stroke::new(1_f32, Color32::from_gray(50)),
+            );
+            if response.dragged() {
+                self.settings.tree_width = (self.settings.tree_width
+                    + ui.input(|v| v.pointer.delta().x))
+                .clamp(150., 400.);
+            }
+            response.on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+            let preview = if self.settings.track_preview && ui.ctx().screen_rect().width() >= 1600.
+            {
+                180.
+            } else {
+                0.
+            };
+            let center =
+                (ui.available_width() - if preview > 0. { preview + 8. } else { 0. }).max(400.);
+            ui.allocate_ui_with_layout(
+                Vec2::new(center, ui.available_height()),
+                egui::Layout::top_down(Align::Min),
+                |ui| {
+                    ui.set_width(center);
+                    if self.settings.cover_strip {
+                        self.cover_strip(ui);
+                    }
+                    egui::ScrollArea::horizontal()
+                        .id_salt("table-columns")
+                        .max_width(center)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.set_min_width(1160.);
+                            self.browser_table(ui);
+                        });
+                },
+            );
+            if preview > 0. {
+                ui.allocate_ui_with_layout(
+                    Vec2::new(preview, ui.available_height()),
+                    egui::Layout::top_down(Align::Min),
+                    |ui| {
+                        ui.set_width(preview);
+                        self.track_preview(ui);
+                    },
+                );
+            }
+        });
+    }
+    fn track_preview(&mut self, ui: &mut egui::Ui) {
+        let Some(entry) = self
+            .library
+            .get(self.selected)
+            .and_then(|p| self.catalog.entries.get(p))
+            .cloned()
+        else {
+            return;
+        };
+        self.artwork.request(&entry);
+        let key = prospekt_dj::artwork::identity(&entry);
+        ui.label(RichText::new("TRACK INFO").small().weak());
+        ui.separator();
+        let (rect, response) = ui.allocate_exact_size(Vec2::splat(150.), Sense::click());
+        ui.painter().rect_filled(rect, 1., Color32::from_gray(18));
+        if let Some(art) = self.art_textures.get_mut(&key) {
+            art.used = self.art_tick;
+            let size = art.texture.size_vec2();
+            let fitted = size * (146. / size.x.max(size.y));
+            ui.painter().image(
+                art.texture.id(),
+                egui::Rect::from_center_size(rect.center(), fitted),
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                Color32::WHITE,
+            );
+        } else {
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "♫",
+                FontId::proportional(30.),
+                Color32::GRAY,
+            );
+        }
+        response.context_menu(|ui| self.art_menu(ui, &entry));
+        ui.add(egui::Label::new(RichText::new(&entry.title).strong().size(13.)).truncate())
+            .on_hover_text(&entry.title);
+        ui.add(egui::Label::new(&entry.artist).truncate())
+            .on_hover_text(&entry.artist);
+        ui.label(
+            RichText::new(format!(
+                "{} · {} BPM · {}",
+                entry.duration.map(short_time).unwrap_or_else(|| "—".into()),
+                entry
+                    .bpm
+                    .map(|b| format!("{b:.1}"))
+                    .unwrap_or_else(|| "—".into()),
+                if entry.key.is_empty() {
+                    "—"
+                } else {
+                    &entry.key
+                }
+            ))
+            .small()
+            .color(ACCENTS[0]),
+        );
+        for (label, value) in [
+            ("Album", &entry.album),
+            ("Genre", &entry.genre),
+            ("Version", &entry.version),
+        ] {
+            if !value.is_empty() {
+                ui.add(egui::Label::new(format!("{label}: {value}")).wrap());
+            }
+        }
+        ui.horizontal(|ui| {
+            for i in 0..self.settings.deck_count {
+                if ui
+                    .add_enabled(!entry.missing, egui::Button::new(letter(i)))
+                    .clicked()
+                {
+                    self.load_manual(i, entry.path.clone());
+                }
+            }
         });
     }
     fn browser_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.set_max_width(172.);
+        ui.set_max_width(self.settings.tree_width);
         for (scope, label) in [
             (Scope::All, tr("Wszystkie utwory")),
             (Scope::Favorites, tr("Ulubione")),
@@ -2053,76 +2530,401 @@ impl Studio {
         }
         ui.add_space(10.);
         ui.label(RichText::new(tr("SKRZYNKI / CRATES")).small().weak());
-        let crates = self.catalog.crates.clone();
-        let mut remove = None;
-        for c in crates {
-            let response = ui.selectable_value(
-                &mut self.scope,
-                Scope::Crate(c.id),
-                format!("{}  {}", c.name, c.tracks.len()),
-            );
-            if response.changed() {
-                self.browser_dirty = true;
-            }
-            response.context_menu(|ui| {
-                if ui.button(tr("Usuń skrzynkę")).clicked() {
-                    remove = Some(c.id);
-                    ui.close_menu();
-                }
+        self.crate_nodes(ui, None, 0);
+        if ui.button(format!("+ {}", tr("Nowa skrzynka"))).clicked() {
+            self.crate_editor = Some(CrateEditor {
+                id: None,
+                parent: None,
+                name: String::new(),
+                cursor: 0..0,
             });
         }
-        if let Some(id) = remove {
-            self.catalog.crates.retain(|c| c.id != id);
-            if self.scope == Scope::Crate(id) {
-                self.scope = Scope::All;
-            }
-            self.browser_dirty = true;
-            self.db_dirty = true;
-        }
-        ui.horizontal(|ui| {
-            let input = ui.add(
-                egui::TextEdit::singleline(&mut self.new_crate)
-                    .hint_text(tr("Nowa skrzynka"))
-                    .desired_width(123.),
-            );
-            let create = ui.small_button("+").clicked()
-                || (input.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
-            if create {
-                if let Some(id) = self.catalog.add_crate(&self.new_crate) {
-                    self.new_crate.clear();
-                    self.scope = Scope::Crate(id);
-                    self.browser_dirty = true;
-                    self.db_dirty = true;
-                }
-            }
-        });
         ui.add_space(10.);
-        ui.label(RichText::new("FOLDERY").small().weak());
-        for folder in self.catalog.roots.clone() {
-            let name = folder
-                .file_name()
-                .unwrap_or(folder.as_os_str())
-                .to_string_lossy()
-                .into_owned();
-            let response = ui
-                .selectable_value(&mut self.scope, Scope::Folder(folder.clone()), name)
-                .on_hover_text(folder.display().to_string());
-            if response.changed() {
-                self.browser_dirty = true;
-            }
+        ui.label(RichText::new(tr("FOLDERY")).small().weak());
+        let mut roots = self.folders.roots.clone();
+        roots.extend(self.catalog.roots.iter().cloned());
+        roots.sort();
+        roots.dedup();
+        for root in roots {
+            self.folder_node(ui, &root, 0);
         }
         ui.add_space(12.);
         ui.label(RichText::new("Upuść pliki lub folder na okno.\nPrawy przycisk: akcje utworu.\nUsuwanie z kolekcji nie usuwa muzyki z dysku.").small().weak());
     }
+    fn crate_nodes(&mut self, ui: &mut egui::Ui, parent: Option<u64>, depth: usize) {
+        if depth > 32 {
+            return;
+        }
+        let nodes: Vec<_> = self
+            .catalog
+            .crates
+            .iter()
+            .filter(|c| c.parent == parent)
+            .cloned()
+            .collect();
+        for node in nodes {
+            let key = format!("crate:{}", node.id);
+            let mut open = self.settings.tree_open.contains(&key);
+            let child = self
+                .catalog
+                .crates
+                .iter()
+                .any(|c| c.parent == Some(node.id));
+            ui.horizontal(|ui| {
+                ui.add_space(depth as f32 * 12.);
+                if ui
+                    .add_enabled(
+                        child,
+                        egui::Button::new(if open { "−" } else { "+" })
+                            .frame(false)
+                            .min_size(Vec2::new(12., 18.)),
+                    )
+                    .clicked()
+                {
+                    open = !open;
+                }
+                tree_icon(ui, Color32::from_rgb(190, 144, 71));
+                let response = tree_choice(
+                    ui,
+                    &mut self.emoji,
+                    &mut self.scope,
+                    Scope::Crate(node.id),
+                    format!("{}  {}", node.name, node.tracks.len()),
+                );
+                if response.changed() {
+                    self.browser_dirty = true;
+                }
+                response.context_menu(|ui| {
+                    if ui.button(tr("Nowa podskrzynka")).clicked() {
+                        self.crate_editor = Some(CrateEditor {
+                            id: None,
+                            parent: Some(node.id),
+                            name: String::new(),
+                            cursor: 0..0,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button(tr("Zmień nazwę")).clicked() {
+                        self.crate_editor = Some(CrateEditor {
+                            id: Some(node.id),
+                            parent: node.parent,
+                            name: node.name.clone(),
+                            cursor: node.name.chars().count()..node.name.chars().count(),
+                        });
+                        ui.close_menu();
+                    }
+                    if let Some(path) = self.library.get(self.selected) {
+                        if ui.button(tr("Dodaj zaznaczony utwór")).clicked() {
+                            if let Some(c) =
+                                self.catalog.crates.iter_mut().find(|c| c.id == node.id)
+                            {
+                                c.tracks.insert(path.clone());
+                                self.db_dirty = true;
+                                self.browser_dirty = true;
+                            }
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button(tr("Usuń skrzynkę")).clicked() {
+                        self.catalog.delete_crate(node.id);
+                        if self.scope == Scope::Crate(node.id) {
+                            self.scope = Scope::All;
+                        }
+                        self.db_dirty = true;
+                        self.browser_dirty = true;
+                        ui.close_menu();
+                    }
+                });
+            });
+            if open {
+                self.settings.tree_open.insert(key);
+                self.crate_nodes(ui, Some(node.id), depth + 1);
+            } else {
+                self.settings.tree_open.remove(&key);
+            }
+        }
+    }
+    fn folder_node(&mut self, ui: &mut egui::Ui, path: &PathBuf, depth: usize) {
+        if depth > 24 {
+            return;
+        }
+        let key = format!("folder:{}", path.display());
+        let mut open = self.settings.tree_open.contains(&key);
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * 12.);
+            if ui.small_button(if open { "−" } else { "+" }).clicked() {
+                open = !open;
+            }
+            let label = path
+                .file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy();
+            tree_icon(ui, Color32::from_gray(168));
+            let response = tree_choice(
+                ui,
+                &mut self.emoji,
+                &mut self.scope,
+                Scope::Folder(path.clone()),
+                label.to_string(),
+            );
+            if response.changed() {
+                self.browser_dirty = true;
+            }
+            response
+                .on_hover_text(path.display().to_string())
+                .context_menu(|ui| {
+                    if ui.button(tr("Importuj folder")).clicked() {
+                        self.add_paths(vec![path.clone()]);
+                        ui.close_menu();
+                    }
+                    if ui.button(tr("Odśwież folder")).clicked() {
+                        self.folders.retry(path);
+                        ui.close_menu();
+                    }
+                });
+        });
+        if open {
+            self.settings.tree_open.insert(key);
+            self.folders.request(path);
+            if let Some(list) = self.folders.cache.get(path).cloned() {
+                if let Some(error) = list.error {
+                    ui.label(RichText::new(error).small().color(Color32::LIGHT_RED));
+                }
+                for child in list.children {
+                    self.folder_node(ui, &child, depth + 1);
+                }
+                if list.truncated && ui.button(tr("Wczytaj więcej folderów")).clicked() {
+                    self.folders.more(path);
+                }
+            } else {
+                ui.label(tr("Wczytywanie…"));
+            }
+        } else {
+            self.settings.tree_open.remove(&key);
+        }
+    }
+    fn crate_dialog(&mut self, ctx: &egui::Context) {
+        let Some(editor) = &mut self.crate_editor else {
+            return;
+        };
+        let mut open = true;
+        let mut save = false;
+        egui::Window::new(tr("Nazwa skrzynki"))
+            .id(egui::Id::new("crate-editor"))
+            .default_pos(egui::pos2(
+                ((ctx.screen_rect().width() - 350.) * 0.5).max(0.),
+                ((ctx.screen_rect().height() - 190.) * 0.4).max(0.),
+            ))
+            .open(&mut open)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                let output = egui::TextEdit::singleline(&mut editor.name)
+                    .id_salt("crate-name")
+                    .desired_width(300.)
+                    .show(ui);
+                if let Some(range) = output.cursor_range {
+                    editor.cursor = range.sorted_cursors()[0].ccursor.index
+                        ..range.sorted_cursors()[1].ccursor.index;
+                }
+                let (preview, _) = ui.allocate_exact_size(Vec2::new(300., 23.), Sense::hover());
+                self.emoji
+                    .paint(ui, preview, &editor.name, ui.visuals().text_color());
+                ui.menu_button("☺ Emoji", |ui| {
+                    egui::Grid::new("emoji-picker")
+                        .num_columns(5)
+                        .show(ui, |ui| {
+                            for (i, emoji) in prospekt_dj::music_view::EMOJI.iter().enumerate() {
+                                if self.emoji.button(ui, emoji).clicked() {
+                                    let cursor = prospekt_dj::music_view::insert_unicode(
+                                        &mut editor.name,
+                                        editor.cursor.clone(),
+                                        emoji,
+                                    );
+                                    editor.cursor = cursor..cursor;
+                                    let mut state = output.state.clone();
+                                    state.cursor.set_char_range(Some(
+                                        egui::text::CCursorRange::one(egui::text::CCursor::new(
+                                            cursor,
+                                        )),
+                                    ));
+                                    state.store(ctx, output.response.id);
+                                    output.response.request_focus();
+                                    ui.close_menu();
+                                }
+                                if i % 5 == 4 {
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                });
+                if ui.button(tr("Zapisz")).clicked()
+                    || output.response.has_focus() && ui.input(|v| v.key_pressed(egui::Key::Enter))
+                {
+                    save = true;
+                }
+            });
+        if save {
+            let editor = self.crate_editor.take().unwrap();
+            let id = if let Some(id) = editor.id {
+                self.catalog.rename_crate(id, &editor.name).then_some(id)
+            } else {
+                self.catalog.add_subcrate(editor.parent, &editor.name)
+            };
+            if let Some(id) = id {
+                self.scope = Scope::Crate(id);
+                if let Some(parent) = editor.parent {
+                    self.settings.tree_open.insert(format!("crate:{parent}"));
+                }
+                self.browser_dirty = true;
+                self.db_dirty = true;
+            } else {
+                self.status = tr("Nazwa jest pusta lub już istnieje.");
+                self.crate_editor = Some(editor);
+            }
+        } else if !open {
+            self.crate_editor = None;
+        }
+    }
+    fn art_menu(&mut self, ui: &mut egui::Ui, entry: &Entry) {
+        ui.menu_button(tr("Okładka"), |ui| {
+            let key = prospekt_dj::artwork::identity(entry);
+            ui.label(
+                self.art_status
+                    .get(&key)
+                    .map(String::as_str)
+                    .unwrap_or("Pending"),
+            );
+            if ui.button(tr("Wybierz obraz…")).clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Image", &["png", "jpg", "jpeg", "webp"])
+                    .pick_file()
+                {
+                    if !self.artwork.manual(entry, path) {
+                        self.status = tr("Kolejka okładek zajęta — spróbuj ponownie.");
+                    }
+                }
+                ui.close_menu();
+            }
+            if ui.button(tr("Odrzuć dopasowanie")).clicked() {
+                self.art_textures.remove(&key);
+                if !self.artwork.reject(entry) {
+                    self.status = tr("Kolejka okładek zajęta — spróbuj ponownie.");
+                }
+                ui.close_menu();
+            }
+            if ui.button(tr("Spróbuj ponownie")).clicked() {
+                if !self.artwork.force(entry) {
+                    self.status = tr("Kolejka okładek zajęta — spróbuj ponownie.");
+                }
+                ui.close_menu();
+            }
+        });
+    }
+    fn cover_strip(&mut self, ui: &mut egui::Ui) {
+        let rows = self.visible();
+        if let Some(entry) = self
+            .library
+            .get(self.selected)
+            .and_then(|p| self.catalog.entries.get(p))
+        {
+            self.artwork.request(entry);
+        }
+        let height = 76.;
+        let step = 78.;
+        let mut scroll = egui::ScrollArea::horizontal()
+            .id_salt("cover-strip")
+            .auto_shrink([false, false])
+            .max_height(height + 4.);
+        if self.cover_reveal {
+            if let Some(n) = rows.iter().position(|i| *i == self.selected) {
+                scroll = scroll.horizontal_scroll_offset(
+                    (n as f32 * step - ui.available_width() * 0.4).max(0.),
+                );
+            }
+            self.cover_reveal = false;
+        }
+        scroll.show_viewport(ui, |ui, viewport| {
+            let origin = ui.cursor().min;
+            let total = rows.len() as f32 * step;
+            ui.set_min_size(Vec2::new(total, height));
+            let first = (viewport.left() / step).floor().max(0.) as usize;
+            let last = ((viewport.right() / step).ceil() as usize + 1).min(rows.len());
+            for (n, &index) in rows.iter().enumerate().take(last).skip(first) {
+                let path = self.library[index].clone();
+                let Some(entry) = self.catalog.entries.get(&path).cloned() else {
+                    continue;
+                };
+                self.artwork.request(&entry);
+                let key = prospekt_dj::artwork::identity(&entry);
+                let rect = egui::Rect::from_min_size(
+                    origin + egui::vec2(n as f32 * step, 0.),
+                    Vec2::splat(72.),
+                );
+                let response = ui.interact(rect, ui.id().with(("art", index)), Sense::click());
+                ui.painter().rect_filled(rect, 1., Color32::from_gray(20));
+                if let Some(art) = self.art_textures.get_mut(&key) {
+                    art.used = self.art_tick;
+                    let size = art.texture.size_vec2();
+                    let fitted = size * (68. / size.x.max(size.y));
+                    let target = egui::Rect::from_center_size(rect.center(), fitted);
+                    ui.painter().image(
+                        art.texture.id(),
+                        target,
+                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                        Color32::WHITE,
+                    );
+                } else {
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "♫",
+                        FontId::proportional(26.),
+                        Color32::from_gray(75),
+                    );
+                }
+                if index == self.selected {
+                    ui.painter().rect_stroke(
+                        rect,
+                        1.,
+                        Stroke::new(2_f32, ACCENTS[0]),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                if response.clicked() {
+                    self.selected = index;
+                    self.scroll_selected = true;
+                }
+                if response.double_clicked() && !entry.missing {
+                    self.load_manual(self.focused, path);
+                }
+                response
+                    .on_hover_text(format!(
+                        "{}\n{} · {}\n{}",
+                        entry.title,
+                        entry.artist,
+                        entry.album,
+                        self.art_status
+                            .get(&key)
+                            .map(String::as_str)
+                            .unwrap_or("Pending")
+                    ))
+                    .context_menu(|ui| self.art_menu(ui, &entry));
+            }
+        });
+    }
     fn browser_table(&mut self, ui: &mut egui::Ui) {
         let width = ui.available_width();
-        let artist = if width > 730. { 145. } else { 0. };
+        let artist = if width > 650. { 130. } else { 0. };
+        let genre = if width > 950. { 90. } else { 0. };
+        let version = if width > 1350. { 100. } else { 0. };
         let album = if width > 1100. { 115. } else { 0. };
         let size = if width > 950. { 68. } else { 0. };
         let title = (width
             - 30.
             - 34.
             - artist
+            - genre
+            - version
             - album
             - 64.
             - 48.
@@ -2137,6 +2939,8 @@ impl Studio {
             (title, "TYTUŁ", Some(Sort::Title)),
             (artist, "WYKONAWCA", Some(Sort::Artist)),
             (album, "ALBUM", Some(Sort::Album)),
+            (version, "REMIX", Some(Sort::Version)),
+            (genre, "GATUNEK", Some(Sort::Genre)),
             (64., "BPM", Some(Sort::Bpm)),
             (48., "KEY", Some(Sort::Key)),
             (62., "CZAS", Some(Sort::Duration)),
@@ -2212,7 +3016,13 @@ impl Studio {
                     let (rect, response) =
                         ui.allocate_exact_size(Vec2::new(width, row_height), Sense::click());
                     let selected = index == self.selected;
-                    let fill = Color32::BLACK;
+                    let fill = if selected {
+                        Color32::from_rgb(35, 64, 79)
+                    } else if response.hovered() {
+                        Color32::from_gray(43)
+                    } else {
+                        Color32::from_gray(if visible_index % 2 == 0 { 17 } else { 27 })
+                    };
                     let fill = if self.settings.light {
                         if selected {
                             Color32::from_rgb(193, 218, 232)
@@ -2231,6 +3041,7 @@ impl Studio {
                     }
                     if response.clicked() {
                         self.selected = index;
+                        self.cover_reveal = true;
                     }
                     if response.double_clicked() && !entry.missing {
                         self.load_manual(self.focused, path.clone());
@@ -2284,6 +3095,12 @@ impl Studio {
                             if album > 0. {
                                 cell(ui, album, &entry.album, ui.visuals().weak_text_color());
                             }
+                            if version > 0. {
+                                cell(ui, version, &entry.version, ui.visuals().weak_text_color());
+                            }
+                            if genre > 0. {
+                                cell(ui, genre, &entry.genre, ui.visuals().weak_text_color());
+                            }
                             cell(
                                 ui,
                                 64.,
@@ -2293,16 +3110,21 @@ impl Studio {
                                     .unwrap_or_else(|| "—".into()),
                                 ACCENTS[0],
                             );
-                            cell(
-                                ui,
-                                48.,
-                                if entry.key.is_empty() {
-                                    "—"
-                                } else {
-                                    &entry.key
-                                },
-                                Color32::from_rgb(155, 174, 222),
-                            );
+                            let tagged = prospekt_dj::music_view::MusicalKey::parse(&entry.key);
+                            let key = if self.settings.key_camelot {
+                                tagged
+                                    .map(|k| k.camelot())
+                                    .unwrap_or_else(|| entry.key.clone())
+                            } else {
+                                entry.key.clone()
+                            };
+                            let color = tagged
+                                .map(|k| {
+                                    let [r, g, b] = k.rgb();
+                                    Color32::from_rgb(r, g, b)
+                                })
+                                .unwrap_or(Color32::GRAY);
+                            cell(ui, 48., if key.is_empty() { "—" } else { &key }, color);
                             cell(
                                 ui,
                                 62.,
@@ -2357,7 +3179,8 @@ impl Studio {
                             }
                         ))
                         .context_menu(|ui| {
-                            for i in 0..4 {
+                            self.art_menu(ui, &entry);
+                            for i in 0..self.settings.deck_count {
                                 if ui
                                     .add_enabled(
                                         !entry.missing,
@@ -2585,6 +3408,12 @@ impl Studio {
                     if self.settings.language != previous {i18n::set_language(&self.settings.language);}
                     ui.separator();ui.heading(tr("Wygląd"));
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
+                    ui.checkbox(&mut self.settings.cover_strip,tr("Pasek okładek"));
+                    ui.checkbox(&mut self.settings.track_preview,"Track info sidebar (wide windows)");
+                    ui.checkbox(&mut self.settings.key_camelot,tr("Tonacje Camelot"));
+                    if ui.checkbox(&mut self.settings.auto_cover_download,tr("Pobieraj brakujące okładki")).changed(){self.artwork.enabled(self.settings.auto_cover_download);}
+                    ui.label(tr("MusicBrainz / Cover Art Archive: wysyłane są wykonawca, album i tytuł; bez audio i prywatnych ścieżek."));
+                    if ui.button(tr("Wyczyść pobrane okładki")).clicked(){if self.artwork.clear(){self.art_textures.clear();self.art_status.clear();}else{self.status=tr("Kolejka okładek zajęta — spróbuj ponownie.");}}
                     ui.label(tr("Liczba decków"));
                     let previous=self.settings.deck_count;
                     ui.horizontal(|ui|{ui.selectable_value(&mut self.settings.deck_count,2,"2 decks");ui.selectable_value(&mut self.settings.deck_count,4,"4 decks");});
@@ -2618,6 +3447,7 @@ impl Studio {
                         ui.hyperlink_to(tr("Pobierz nowe wydanie"),"https://github.com/prospektdj/prospektdj/releases");
                         ui.hyperlink_to("GitHub · Licenses","https://github.com/prospektdj/prospektdj/tree/main/licenses");
                     });
+                    ui.hyperlink_to("Color emoji: Twemoji · CC BY 4.0", "https://github.com/jdecked/twemoji");
                     ui.separator();ui.heading(tr("Licencje"));
                     ui.text_edit_singleline(&mut self.license_search);
                     let licenses=prospekt_dj::notices::LICENSES;
@@ -3155,16 +3985,12 @@ impl Studio {
         }
     }
     fn keyboard(&mut self, ctx: &egui::Context) {
+        self.bend_keys = [0.; 4];
+        if self.crate_editor.is_some() {
+            return;
+        }
         if ctx.input(|input| input.key_pressed(egui::Key::F11)) {
             toggle_fullscreen(ctx);
-        }
-        for (i, (minus, plus)) in [(egui::Key::Z, egui::Key::X), (egui::Key::N, egui::Key::M)]
-            .iter()
-            .enumerate()
-        {
-            if ctx.input(|input| input.key_released(*minus) || input.key_released(*plus)) {
-                self.send(Command::Deck(i, DeckControl::Bend(0.)));
-            }
         }
         if self.settings_open
             || ctx.wants_keyboard_input()
@@ -3218,6 +4044,7 @@ impl Studio {
                     .clamp(0, visible.len().saturating_sub(1) as isize)
                     as usize;
                 self.selected = visible[next];
+                self.cover_reveal = true;
             }
         }
         for (p, key) in [
@@ -3234,7 +4061,7 @@ impl Studio {
         .enumerate()
         {
             if pressed(key) {
-                self.deck(self.focused, DeckControl::Pad(p, shift));
+                self.deck(self.focused, DeckControl::HotCue(p, shift));
             }
         }
         for (i, keys) in [
@@ -3273,12 +4100,7 @@ impl Studio {
                     0.
                 }
             });
-            if value != 0.
-                || ctx.input(|input| input.key_released(*minus) || input.key_released(*plus))
-            {
-                self.stop_auto();
-                self.send(Command::Deck(i, DeckControl::Bend(value)));
-            }
+            self.bend_keys[i] = value;
         }
     }
     fn confirm_close(&mut self, ctx: &egui::Context) {
@@ -3321,6 +4143,8 @@ impl Studio {
 }
 impl eframe::App for Studio {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.bend_buttons = [0.; 4];
+        self.crate_dialog(ctx);
         self.poll(ctx);
         self.keyboard(ctx);
         if ctx.input(|input| input.viewport().close_requested())
@@ -3363,18 +4187,26 @@ impl eframe::App for Studio {
             )))
             .resizable(true)
             .default_height(if self.settings.deck_count == 4 {
-                730.
+                640.
             } else if self.settings.show_effects {
                 match self.dock_tab {
                     0 => 620.,
-                    1 => 435.,
-                    _ => 455.,
+                    1 => 440.,
+                    _ => 500.,
                 }
             } else {
-                350.
+                380.
             })
             .min_height(220.)
-            .max_height((ctx.screen_rect().height() - 260.).max(220.))
+            .max_height(
+                (ctx.screen_rect().height()
+                    - if ctx.screen_rect().height() < 850. {
+                        370.
+                    } else {
+                        300.
+                    })
+                .max(220.),
+            )
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("console-scroll")
@@ -3389,6 +4221,7 @@ impl eframe::App for Studio {
         if self.settings_open {
             self.settings_ui(ctx);
         }
+        self.apply_bends(ctx);
         self.confirm_close(ctx);
         ctx.request_repaint_after(Duration::from_millis(33));
     }
@@ -3443,37 +4276,17 @@ fn keyboard_help(ui: &mut egui::Ui) {
 fn actions() -> Vec<String> {
     midi::actions()
 }
-fn cover(ctx: &egui::Context, deck: usize, bytes: Option<&[u8]>) -> Option<egui::TextureHandle> {
-    let bytes = bytes?;
-    let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()?
-        .into_dimensions()
-        .ok()?;
-    if dimensions.0 > 4096 || dimensions.1 > 4096 {
-        return None;
-    }
-    let image = image::load_from_memory(bytes)
-        .ok()?
-        .thumbnail(256, 256)
-        .to_rgba8();
-    let size = [image.width() as usize, image.height() as usize];
-    Some(ctx.load_texture(
-        format!("cover-{deck}"),
-        egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
-        Default::default(),
-    ))
-}
 fn waveform(
     ui: &mut egui::Ui,
     deck: &DeckView,
     accent: Color32,
     height: f32,
     span: Option<f64>,
-) -> Option<f64> {
+) -> Option<WaveAction> {
     let (response, painter) =
         ui.allocate_painter(Vec2::new(ui.available_width(), height), Sense::click());
     let rect = response.rect;
+    let painter = painter.with_clip_rect(rect);
     painter.rect_filled(rect, 3., ui.visuals().extreme_bg_color);
     painter.line_segment(
         [rect.left_center(), rect.right_center()],
@@ -3574,12 +4387,111 @@ fn waveform(
             );
         }
     }
-    response
-        .interact_pointer_pos()
-        .filter(|_| response.clicked())
-        .map(|p| {
-            (start + (p.x - rect.left()) as f64 / rect.width() as f64 * range).clamp(0., duration)
+    let timeline = prospekt_dj::music_view::Timeline {
+        start,
+        span: range,
+        duration,
+    };
+    let markers: Vec<_> = deck
+        .hot
+        .iter()
+        .enumerate()
+        .filter_map(|(n, t)| {
+            t.and_then(|t| {
+                timeline
+                    .project(t)
+                    .map(|fraction| (n, t, rect.left() + fraction * rect.width()))
+            })
         })
+        .collect();
+    for &(n, _, x) in &markers {
+        let color = cue_color(n);
+        painter.line_segment(
+            [egui::pos2(x, rect.top() + 7.), egui::pos2(x, rect.bottom())],
+            Stroke::new(1_f32, color.gamma_multiply(0.65)),
+        );
+        painter.add(egui::Shape::convex_polygon(
+            vec![
+                egui::pos2(x - 4., rect.top()),
+                egui::pos2(x + 4., rect.top()),
+                egui::pos2(x, rect.top() + 7.),
+            ],
+            color,
+            Stroke::NONE,
+        ));
+        if height > 25. {
+            painter.text(
+                egui::pos2(x + 4., rect.top() + 8.),
+                egui::Align2::LEFT_TOP,
+                (n + 1).to_string(),
+                FontId::monospace(9.),
+                color,
+            );
+        }
+    }
+    let hovered = ui
+        .input(|v| v.pointer.hover_pos())
+        .filter(|p| rect.contains(*p));
+    let hits: Vec<_> = hovered
+        .map(|p| {
+            markers
+                .iter()
+                .filter(|(_, _, x)| (*x - p.x).abs() <= 6.)
+                .collect()
+        })
+        .unwrap_or_default();
+    if !hits.is_empty() {
+        response.clone().on_hover_text(
+            hits.iter()
+                .map(|(n, t, _)| format!("Cue {} · {}", n + 1, time(*t)))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+    }
+    let popup_id = response.id.with("cue-overlap");
+    if response.clicked() && hits.len() > 1 {
+        ui.memory_mut(|m| m.toggle_popup(popup_id));
+    }
+    let mut chosen = None;
+    egui::popup_below_widget(
+        ui,
+        popup_id,
+        &response,
+        egui::PopupCloseBehavior::CloseOnClickOutside,
+        |ui| {
+            // Full list remains stable after pointer moves into the popup.
+            for (n, t) in deck
+                .hot
+                .iter()
+                .enumerate()
+                .filter_map(|(n, t)| t.map(|t| (n, t)))
+            {
+                if ui
+                    .button(
+                        RichText::new(format!("Cue {} · {}", n + 1, time(t))).color(cue_color(n)),
+                    )
+                    .clicked()
+                {
+                    chosen = Some(WaveAction::Cue(n));
+                    ui.close_menu();
+                }
+            }
+        },
+    );
+    if chosen.is_some() {
+        return chosen;
+    }
+    if response.clicked() {
+        if hits.len() == 1 {
+            return Some(WaveAction::Cue(hits[0].0));
+        }
+        if hits.is_empty() {
+            return response
+                .interact_pointer_pos()
+                .map(|p| WaveAction::Seek(timeline.at((p.x - rect.left()) / rect.width())));
+        }
+    }
+    None
 }
 
 fn cell(ui: &mut egui::Ui, width: f32, text: &str, color: Color32) {
@@ -3603,8 +4515,8 @@ fn console_theme(ctx: &egui::Context, light: bool) {
         egui::Visuals::dark()
     };
     if !light {
-        v.panel_fill = Color32::BLACK;
-        v.window_fill = Color32::BLACK;
+        v.panel_fill = Color32::from_gray(8);
+        v.window_fill = Color32::from_gray(8);
         v.extreme_bg_color = Color32::BLACK;
         v.faint_bg_color = Color32::BLACK;
         v.widgets.inactive.bg_fill = Color32::BLACK;
@@ -3623,8 +4535,8 @@ fn console_theme(ctx: &egui::Context, light: bool) {
         Color32::BLACK
     };
     if !light {
-        v.window_fill = Color32::BLACK;
-        v.panel_fill = Color32::BLACK;
+        v.window_fill = Color32::from_gray(8);
+        v.panel_fill = Color32::from_gray(8);
         v.extreme_bg_color = Color32::BLACK;
         v.faint_bg_color = Color32::BLACK;
         v.code_bg_color = Color32::BLACK;

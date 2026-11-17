@@ -19,6 +19,9 @@ pub struct Entry {
     pub artist: String,
     pub album: String,
     pub genre: String,
+    pub version: String,
+    pub musicbrainz_release: String,
+    pub musicbrainz_recording: String,
     pub key: String,
     pub bpm: Option<f64>,
     pub duration: Option<f64>,
@@ -35,6 +38,9 @@ impl Default for Entry {
             artist: String::new(),
             album: String::new(),
             genre: String::new(),
+            version: String::new(),
+            musicbrainz_release: String::new(),
+            musicbrainz_recording: String::new(),
             key: String::new(),
             bpm: None,
             duration: None,
@@ -92,6 +98,20 @@ impl Entry {
                 if let Some(s) = tag.genre() {
                     e.genre = s.into_owned();
                 }
+                e.version = tag
+                    .get_string(&ItemKey::TrackSubtitle)
+                    .or_else(|| tag.get_string(&ItemKey::Unknown("VERSION".into())))
+                    .or_else(|| tag.get_string(&ItemKey::Unknown("REMIX".into())))
+                    .unwrap_or("")
+                    .to_owned();
+                e.musicbrainz_release = tag
+                    .get_string(&ItemKey::MusicBrainzReleaseId)
+                    .unwrap_or("")
+                    .to_owned();
+                e.musicbrainz_recording = tag
+                    .get_string(&ItemKey::MusicBrainzRecordingId)
+                    .unwrap_or("")
+                    .to_owned();
                 e.key = tag
                     .get_string(&ItemKey::InitialKey)
                     .unwrap_or("")
@@ -107,11 +127,12 @@ impl Entry {
     }
     fn matches(&self, query: &str) -> bool {
         let text = format!(
-            "{} {} {} {} {} {}",
+            "{} {} {} {} {} {} {}",
             self.title,
             self.artist,
             self.album,
             self.genre,
+            self.version,
             self.key,
             self.path.display()
         )
@@ -126,7 +147,7 @@ pub fn index(
     force: bool,
     mut publish: impl FnMut(Vec<Entry>),
 ) -> Vec<PathBuf> {
-    let force = force || cache.schema < 1;
+    let force = force || cache.schema < 2;
     let identity = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let mut known: BTreeMap<PathBuf, PathBuf> =
         existing.into_iter().map(|p| (identity(&p), p)).collect();
@@ -200,6 +221,8 @@ pub struct Crate {
     pub id: u64,
     pub name: String,
     pub tracks: BTreeSet<PathBuf>,
+    #[serde(default)]
+    pub parent: Option<u64>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -210,7 +233,7 @@ pub struct Catalog {
     pub roots: BTreeSet<PathBuf>,
     pub excluded: BTreeSet<PathBuf>,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Scope {
     #[default]
     All,
@@ -231,6 +254,8 @@ pub enum Sort {
     Duration,
     Size,
     Bitrate,
+    Genre,
+    Version,
 }
 pub struct Query<'a> {
     pub text: &'a str,
@@ -238,13 +263,17 @@ pub struct Query<'a> {
     pub sort: Sort,
     pub descending: bool,
     pub favorites: &'a BTreeSet<PathBuf>,
-    pub loaded: [Option<&'a Path>; 2],
+    pub loaded: [Option<&'a Path>; 4],
 }
 impl Catalog {
     pub fn load(path: &Path) -> Self {
         std::fs::read(path)
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
+            .map(|mut c: Self| {
+                c.repair_tree();
+                c
+            })
             .unwrap_or_default()
     }
     pub fn save(&self, path: &Path) -> Result<()> {
@@ -260,26 +289,11 @@ impl Catalog {
         std::fs::rename(tmp, path).context("Nie można zapisać katalogu muzyki")
     }
     pub fn merge(&mut self, entry: Entry) {
-        self.schema = 1;
+        self.schema = 2;
         self.entries.insert(entry.path.clone(), entry);
     }
     pub fn add_crate(&mut self, name: &str) -> Option<u64> {
-        let name = name.trim();
-        if name.is_empty()
-            || self
-                .crates
-                .iter()
-                .any(|c| c.name.eq_ignore_ascii_case(name))
-        {
-            return None;
-        }
-        let id = self.crates.iter().map(|c| c.id).max().unwrap_or(0) + 1;
-        self.crates.push(Crate {
-            id,
-            name: name.to_owned(),
-            tracks: BTreeSet::new(),
-        });
-        Some(id)
+        self.add_subcrate(None, name)
     }
     pub fn remove(&mut self, path: &Path) {
         self.excluded.insert(path.to_path_buf());
@@ -290,6 +304,11 @@ impl Catalog {
     }
     pub fn visible(&self, paths: &[PathBuf], q: &Query<'_>) -> Vec<usize> {
         let search = q.text.to_lowercase();
+        let crate_tracks = if let Scope::Crate(id) = q.scope {
+            self.crate_tracks(*id)
+        } else {
+            BTreeSet::new()
+        };
         let mut rows: Vec<_> = paths
             .iter()
             .enumerate()
@@ -300,11 +319,7 @@ impl Catalog {
                     Scope::Loaded => q.loaded.contains(&Some(path.as_path())),
                     Scope::Missing => self.entries.get(*path).is_some_and(|e| e.missing),
                     Scope::Folder(root) => path.starts_with(root),
-                    Scope::Crate(id) => self
-                        .crates
-                        .iter()
-                        .find(|c| c.id == *id)
-                        .is_some_and(|c| c.tracks.contains(*path)),
+                    Scope::Crate(_) => crate_tracks.contains(*path),
                 };
                 scope
                     && (search.is_empty()
@@ -334,6 +349,8 @@ impl Catalog {
                         .total_cmp(&y.duration.unwrap_or(0.)),
                     Sort::Size => x.bytes.cmp(&y.bytes),
                     Sort::Bitrate => x.bitrate.cmp(&y.bitrate),
+                    Sort::Genre => x.genre.to_lowercase().cmp(&y.genre.to_lowercase()),
+                    Sort::Version => x.version.to_lowercase().cmp(&y.version.to_lowercase()),
                 },
                 _ => paths[a].cmp(&paths[b]),
             };
@@ -345,5 +362,133 @@ impl Catalog {
             }
         });
         rows
+    }
+}
+
+impl Catalog {
+    pub fn add_subcrate(&mut self, parent: Option<u64>, name: &str) -> Option<u64> {
+        if parent.is_some_and(|id| !self.crates.iter().any(|c| c.id == id)) {
+            return None;
+        }
+        let name = name.trim();
+        if name.is_empty()
+            || self
+                .crates
+                .iter()
+                .any(|c| c.parent == parent && c.name.to_lowercase() == name.to_lowercase())
+        {
+            return None;
+        }
+        let id = self
+            .crates
+            .iter()
+            .map(|c| c.id)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)?;
+        self.crates.push(Crate {
+            id,
+            name: name.into(),
+            tracks: BTreeSet::new(),
+            parent,
+        });
+        Some(id)
+    }
+    pub fn rename_crate(&mut self, id: u64, name: &str) -> bool {
+        let name = name.trim();
+        let Some(parent) = self.crates.iter().find(|c| c.id == id).map(|c| c.parent) else {
+            return false;
+        };
+        if name.is_empty()
+            || self.crates.iter().any(|c| {
+                c.id != id && c.parent == parent && c.name.to_lowercase() == name.to_lowercase()
+            })
+        {
+            return false;
+        }
+        self.crates.iter_mut().find(|c| c.id == id).unwrap().name = name.into();
+        true
+    }
+    pub fn move_crate(&mut self, id: u64, parent: Option<u64>) -> bool {
+        if !self.crates.iter().any(|c| c.id == id) {
+            return false;
+        }
+        let mut at = parent;
+        let mut seen = BTreeSet::new();
+        while let Some(p) = at {
+            if p == id || !seen.insert(p) {
+                return false;
+            }
+            let Some(c) = self.crates.iter().find(|c| c.id == p) else {
+                return false;
+            };
+            at = c.parent;
+        }
+        self.crates.iter_mut().find(|c| c.id == id).unwrap().parent = parent;
+        true
+    }
+    pub fn delete_crate(&mut self, id: u64) {
+        let Some(parent) = self.crates.iter().find(|c| c.id == id).map(|c| c.parent) else {
+            return;
+        };
+        self.crates.retain(|c| c.id != id);
+        for c in &mut self.crates {
+            if c.parent == Some(id) {
+                c.parent = parent;
+            }
+        }
+    }
+    pub fn crate_tracks(&self, id: u64) -> BTreeSet<PathBuf> {
+        let mut todo = vec![id];
+        let mut seen = BTreeSet::new();
+        let mut tracks = BTreeSet::new();
+        while let Some(id) = todo.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            if let Some(c) = self.crates.iter().find(|c| c.id == id) {
+                tracks.extend(c.tracks.iter().cloned());
+            }
+            todo.extend(
+                self.crates
+                    .iter()
+                    .filter(|c| c.parent == Some(id))
+                    .map(|c| c.id),
+            );
+        }
+        tracks
+    }
+    pub fn repair_tree(&mut self) {
+        let ids: BTreeSet<_> = self.crates.iter().map(|c| c.id).collect();
+        for c in &mut self.crates {
+            if c.parent == Some(c.id) || c.parent.is_some_and(|p| !ids.contains(&p)) {
+                c.parent = None;
+            }
+        }
+        let broken: Vec<_> = self
+            .crates
+            .iter()
+            .filter(|c| {
+                let mut seen = BTreeSet::new();
+                let mut at = Some(c.id);
+                while let Some(id) = at {
+                    if !seen.insert(id) {
+                        return true;
+                    }
+                    at = self
+                        .crates
+                        .iter()
+                        .find(|p| p.id == id)
+                        .and_then(|p| p.parent);
+                }
+                false
+            })
+            .map(|c| c.id)
+            .collect();
+        for c in &mut self.crates {
+            if broken.contains(&c.id) {
+                c.parent = None;
+            }
+        }
     }
 }

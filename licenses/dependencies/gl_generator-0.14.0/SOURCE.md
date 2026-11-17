@@ -1,0 +1,3 @@
+Upstream license notices recovered from the published crate commit.
+
+https://github.com/brendanzab/gl-rs/tree/ea503e8d5fb6d73c6030e6191ce738cd3bf3433e

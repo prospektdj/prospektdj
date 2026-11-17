@@ -120,7 +120,9 @@ jobs:
           cat > release-notes.md <<'NOTES'
           **BETA — wersja testowa / beta release.**
 
-          Prospekt DJ Rust 2.2 BETA — black interface, 2/4 decks, eight hot cues per deck, eight effects and controller profiles.
+          Prospekt DJ Rust 2.3 BETA — compact DJ layout, larger animated jogs, spring pitch-bend faders, larger channel/crossfader controls, eight colored hot cues, nested crates, 3,846 offline color Twemoji icons, lazy folder tree, cover strip and verified online artwork.
+          Online artwork is enabled by default. Only artist/album/title and public MusicBrainz IDs are sent to MusicBrainz / Cover Art Archive; no audio or private paths. Disable it in Settings.
+          See docs/UPDATE-2.3.md for changes, validation and limitations.
           Open source: AGPL-3.0-or-later. Proprietary Helvetica font is not bundled; select a licensed local file in settings.
 
           - Windows x64: rozpakuj ZIP i uruchom prospekt-dj.exe.

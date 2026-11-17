@@ -14,3 +14,11 @@ pub mod telemetry;
 pub mod notices;
 
 pub mod controller_import;
+
+pub mod artwork;
+pub mod folder_tree;
+pub mod music_view;
+
+pub mod emoji_assets {
+    include!(concat!(env!("OUT_DIR"), "/emoji_assets.rs"));
+}

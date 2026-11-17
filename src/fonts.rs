@@ -7,6 +7,10 @@ pub fn install(ctx: &egui::Context, custom: Option<&Path>) -> String {
     let mut fonts = FontDefinitions::default();
     for (name, data) in [
         (
+            "Emoji",
+            include_bytes!("../assets/fonts/NotoEmoji.ttf").as_slice(),
+        ),
+        (
             "Chinese",
             include_bytes!("../assets/fonts/ProspektChinese.otf").as_slice(),
         ),

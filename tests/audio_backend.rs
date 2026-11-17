@@ -20,6 +20,7 @@ fn cpal_callback_updates_state_and_records_audio() {
     let runtime = audio::start(rx, view.clone(), errors, "", "", 12).expect("test output device");
     tx.send(Command::Deck(0, DeckControl::Load(media::demo(0))))
         .unwrap();
+    tx.send(Command::Deck(0, DeckControl::Loop(4.))).unwrap();
     tx.send(Command::Deck(0, DeckControl::Play)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(3);
     while view.lock().unwrap().decks[0].position < 0.01 {
@@ -30,7 +31,11 @@ fn cpal_callback_updates_state_and_records_audio() {
     let (sink, result) =
         recording::start(output.clone(), Format::Wav, runtime.sample_rate).unwrap();
     tx.send(Command::Recording(Some(sink))).unwrap();
-    std::thread::sleep(Duration::from_millis(20));
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while view.lock().unwrap().recorded_seconds < 0.05 {
+        assert!(Instant::now() < deadline, "callback did not capture audio");
+        std::thread::sleep(Duration::from_millis(2));
+    }
     tx.send(Command::Recording(None)).unwrap();
     assert_eq!(
         result

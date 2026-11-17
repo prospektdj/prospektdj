@@ -1,8 +1,8 @@
 # BETA — biblioteki i licencje
 
-Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled.
+Prospekt DJ 2.3 BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
 
-| Biblioteka | Wersja | Licencja | Źródła |
+| Library | Version | License | Source |
 |---|---|---|---|
 | ab_glyph | 0.2.32 | Apache-2.0 | https://crates.io/crates/ab_glyph/0.2.32 |
 | ab_glyph_rasterizer | 0.1.10 | Apache-2.0 | https://crates.io/crates/ab_glyph_rasterizer/0.1.10 |
@@ -35,12 +35,15 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | async-trait | 0.1.92 | MIT OR Apache-2.0 | https://crates.io/crates/async-trait/0.1.92 |
 | atomic-waker | 1.1.2 | Apache-2.0 OR MIT | https://crates.io/crates/atomic-waker/1.1.2 |
 | autocfg | 1.5.1 | Apache-2.0 OR MIT | https://crates.io/crates/autocfg/1.5.1 |
+| base64 | 0.22.1 | MIT OR Apache-2.0 | https://crates.io/crates/base64/0.22.1 |
+| base64 | 0.23.1 | MIT OR Apache-2.0 | https://crates.io/crates/base64/0.23.1 |
 | bindgen | 0.72.1 | BSD-3-Clause | https://crates.io/crates/bindgen/0.72.1 |
 | bit-set | 0.8.0 | Apache-2.0 OR MIT | https://crates.io/crates/bit-set/0.8.0 |
 | bit-vec | 0.8.0 | Apache-2.0 OR MIT | https://crates.io/crates/bit-vec/0.8.0 |
 | bitflags | 1.3.2 | MIT/Apache-2.0 | https://crates.io/crates/bitflags/1.3.2 |
 | bitflags | 2.13.2 | MIT OR Apache-2.0 | https://crates.io/crates/bitflags/2.13.2 |
 | block | 0.1.6 | MIT | https://crates.io/crates/block/0.1.6 |
+| block-buffer | 0.10.4 | MIT OR Apache-2.0 | https://crates.io/crates/block-buffer/0.10.4 |
 | block2 | 0.5.1 | MIT | https://crates.io/crates/block2/0.5.1 |
 | block2 | 0.6.2 | MIT | https://crates.io/crates/block2/0.6.2 |
 | blocking | 1.7.0 | Apache-2.0 OR MIT | https://crates.io/crates/blocking/1.7.0 |
@@ -59,6 +62,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | https://crates.io/crates/cfg-if/1.0.5 |
 | cfg_aliases | 0.2.2 | MIT | https://crates.io/crates/cfg_aliases/0.2.2 |
 | cgl | 0.3.2 | MIT / Apache-2.0 | https://crates.io/crates/cgl/0.3.2 |
+| chacha20 | 0.10.2 | MIT OR Apache-2.0 | https://crates.io/crates/chacha20/0.10.2 |
 | chrono | 0.4.45 | MIT OR Apache-2.0 | https://crates.io/crates/chrono/0.4.45 |
 | clang-sys | 1.9.1 | Apache-2.0 | https://crates.io/crates/clang-sys/1.9.1 |
 | clipboard-win | 5.4.3 | BSL-1.0 | https://crates.io/crates/clipboard-win/5.4.3 |
@@ -76,13 +80,17 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | coremidi | 0.9.2 | MIT | https://crates.io/crates/coremidi/0.9.2 |
 | coremidi-sys | 3.2.1 | MIT | https://crates.io/crates/coremidi-sys/3.2.1 |
 | cpal | 0.15.3 | Apache-2.0 | https://crates.io/crates/cpal/0.15.3 |
+| cpufeatures | 0.2.17 | MIT OR Apache-2.0 | https://crates.io/crates/cpufeatures/0.2.17 |
+| cpufeatures | 0.3.1 | MIT OR Apache-2.0 | https://crates.io/crates/cpufeatures/0.3.1 |
 | crc32fast | 1.5.5 | MIT OR Apache-2.0 | https://crates.io/crates/crc32fast/1.5.5 |
 | crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 | https://crates.io/crates/crossbeam-channel/0.5.17 |
 | crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | https://crates.io/crates/crossbeam-utils/0.8.23 |
 | crunchy | 0.2.4 | MIT | https://crates.io/crates/crunchy/0.2.4 |
+| crypto-common | 0.1.7 | MIT OR Apache-2.0 | https://crates.io/crates/crypto-common/0.1.7 |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://crates.io/crates/cursor-icon/1.2.0 |
 | dasp_sample | 0.11.0 | MIT OR Apache-2.0 | https://crates.io/crates/dasp_sample/0.11.0 |
 | data-encoding | 2.11.1 | MIT | https://crates.io/crates/data-encoding/2.11.1 |
+| digest | 0.10.7 | MIT OR Apache-2.0 | https://crates.io/crates/digest/0.10.7 |
 | directories | 6.0.0 | MIT OR Apache-2.0 | https://crates.io/crates/directories/6.0.0 |
 | dirs-sys | 0.5.0 | MIT OR Apache-2.0 | https://crates.io/crates/dirs-sys/0.5.0 |
 | dispatch | 0.2.0 | MIT | https://crates.io/crates/dispatch/0.2.0 |
@@ -127,9 +135,12 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | futures-io | 0.3.34 | MIT OR Apache-2.0 | https://crates.io/crates/futures-io/0.3.34 |
 | futures-lite | 2.6.1 | Apache-2.0 OR MIT | https://crates.io/crates/futures-lite/2.6.1 |
 | futures-macro | 0.3.34 | MIT OR Apache-2.0 | https://crates.io/crates/futures-macro/0.3.34 |
+| futures-sink | 0.3.34 | MIT OR Apache-2.0 | https://crates.io/crates/futures-sink/0.3.34 |
 | futures-task | 0.3.34 | MIT OR Apache-2.0 | https://crates.io/crates/futures-task/0.3.34 |
 | futures-util | 0.3.34 | MIT OR Apache-2.0 | https://crates.io/crates/futures-util/0.3.34 |
+| generic-array | 0.14.7 | MIT | https://crates.io/crates/generic-array/0.14.7 |
 | gethostname | 1.1.0 | Apache-2.0 | https://crates.io/crates/gethostname/1.1.0 |
+| getrandom | 0.2.17 | MIT OR Apache-2.0 | https://crates.io/crates/getrandom/0.2.17 |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 | https://crates.io/crates/getrandom/0.3.4 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 | https://crates.io/crates/getrandom/0.4.3 |
 | gl_generator | 0.14.0 | Apache-2.0 | https://crates.io/crates/gl_generator/0.14.0 |
@@ -152,6 +163,13 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | hex | 0.4.3 | MIT OR Apache-2.0 | https://crates.io/crates/hex/0.4.3 |
 | hexf-parse | 0.2.1 | CC0-1.0 | https://crates.io/crates/hexf-parse/0.2.1 |
 | hound | 3.5.1 | Apache-2.0 | https://crates.io/crates/hound/3.5.1 |
+| http | 1.5.0 | MIT OR Apache-2.0 | https://crates.io/crates/http/1.5.0 |
+| http-body | 1.1.0 | MIT | https://crates.io/crates/http-body/1.1.0 |
+| http-body-util | 0.1.5 | MIT | https://crates.io/crates/http-body-util/0.1.5 |
+| httparse | 1.10.1 | MIT OR Apache-2.0 | https://crates.io/crates/httparse/1.10.1 |
+| hyper | 1.12.0 | MIT | https://crates.io/crates/hyper/1.12.0 |
+| hyper-rustls | 0.27.10 | Apache-2.0 OR ISC OR MIT | https://crates.io/crates/hyper-rustls/0.27.10 |
+| hyper-util | 0.1.21 | MIT | https://crates.io/crates/hyper-util/0.1.21 |
 | iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | https://crates.io/crates/iana-time-zone/0.1.65 |
 | iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | https://crates.io/crates/iana-time-zone-haiku/0.1.2 |
 | icu_collections | 2.4.0 | Unicode-3.0 | https://crates.io/crates/icu_collections/2.4.0 |
@@ -166,6 +184,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | image | 0.25.10 | MIT OR Apache-2.0 | https://crates.io/crates/image/0.25.10 |
 | image-webp | 0.2.4 | MIT OR Apache-2.0 | https://crates.io/crates/image-webp/0.2.4 |
 | indexmap | 2.14.2 | Apache-2.0 OR MIT | https://crates.io/crates/indexmap/2.14.2 |
+| ipnet | 2.12.2 | MIT OR Apache-2.0 | https://crates.io/crates/ipnet/2.12.2 |
 | itertools | 0.13.0 | MIT OR Apache-2.0 | https://crates.io/crates/itertools/0.13.0 |
 | itoa | 1.0.19 | MIT OR Apache-2.0 | https://crates.io/crates/itoa/1.0.19 |
 | jni | 0.21.1 | MIT/Apache-2.0 | https://crates.io/crates/jni/0.21.1 |
@@ -190,6 +209,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | lofty | 0.22.4 | MIT OR Apache-2.0 | https://crates.io/crates/lofty/0.22.4 |
 | lofty_attr | 0.11.1 | MIT OR Apache-2.0 | https://crates.io/crates/lofty_attr/0.11.1 |
 | log | 0.4.35 | MIT OR Apache-2.0 | https://crates.io/crates/log/0.4.35 |
+| lru-slab | 0.1.3 | MIT OR Apache-2.0 OR Zlib | https://crates.io/crates/lru-slab/0.1.3 |
 | mach2 | 0.4.3 | BSD-2-Clause OR MIT OR Apache-2.0 | https://crates.io/crates/mach2/0.4.3 |
 | malloc_buf | 0.0.6 | MIT | https://crates.io/crates/malloc_buf/0.0.6 |
 | memchr | 2.8.3 | Unlicense OR MIT | https://crates.io/crates/memchr/2.8.3 |
@@ -200,6 +220,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | minimal-lexical | 0.2.1 | MIT/Apache-2.0 | https://crates.io/crates/minimal-lexical/0.2.1 |
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | https://crates.io/crates/miniz_oxide/0.8.9 |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | https://crates.io/crates/miniz_oxide/0.9.1 |
+| mio | 1.2.5 | MIT | https://crates.io/crates/mio/1.2.5 |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://crates.io/crates/moxcms/0.8.1 |
 | multiversion_no_op | 1.0.0 | Apache-2.0 OR MIT | https://crates.io/crates/multiversion_no_op/1.0.0 |
 | naga | 24.0.0 | MIT OR Apache-2.0 | https://crates.io/crates/naga/24.0.0 |
@@ -271,12 +292,18 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | https://crates.io/crates/pxfm/0.1.30 |
 | quick-error | 2.0.1 | MIT/Apache-2.0 | https://crates.io/crates/quick-error/2.0.1 |
 | quick-xml | 0.41.0 | MIT | https://crates.io/crates/quick-xml/0.41.0 |
+| quinn | 0.11.12 | MIT OR Apache-2.0 | https://crates.io/crates/quinn/0.11.12 |
+| quinn-proto | 0.11.19 | MIT OR Apache-2.0 | https://crates.io/crates/quinn-proto/0.11.19 |
+| quinn-udp | 0.5.16 | MIT OR Apache-2.0 | https://crates.io/crates/quinn-udp/0.5.16 |
 | quote | 1.0.47 | MIT OR Apache-2.0 | https://crates.io/crates/quote/1.0.47 |
 | r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://crates.io/crates/r-efi/5.3.0 |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://crates.io/crates/r-efi/6.0.0 |
+| rand | 0.10.4 | MIT OR Apache-2.0 | https://crates.io/crates/rand/0.10.4 |
 | rand | 0.9.5 | MIT OR Apache-2.0 | https://crates.io/crates/rand/0.9.5 |
 | rand_chacha | 0.9.0 | MIT OR Apache-2.0 | https://crates.io/crates/rand_chacha/0.9.0 |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | https://crates.io/crates/rand_core/0.10.1 |
 | rand_core | 0.9.5 | MIT OR Apache-2.0 | https://crates.io/crates/rand_core/0.9.5 |
+| rand_pcg | 0.10.2 | MIT OR Apache-2.0 | https://crates.io/crates/rand_pcg/0.10.2 |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | https://crates.io/crates/raw-window-handle/0.6.2 |
 | redox_syscall | 0.4.1 | MIT | https://crates.io/crates/redox_syscall/0.4.1 |
 | redox_syscall | 0.5.18 | MIT | https://crates.io/crates/redox_syscall/0.5.18 |
@@ -286,14 +313,20 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | regex-automata | 0.4.18 | MIT OR Apache-2.0 | https://crates.io/crates/regex-automata/0.4.18 |
 | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | https://crates.io/crates/regex-syntax/0.8.11 |
 | renderdoc-sys | 1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/renderdoc-sys/1.1.0 |
+| reqwest | 0.12.28 | MIT OR Apache-2.0 | https://crates.io/crates/reqwest/0.12.28 |
 | rfd | 0.15.4 | MIT | https://crates.io/crates/rfd/0.15.4 |
+| ring | 0.17.14 | Apache-2.0 AND ISC | https://crates.io/crates/ring/0.17.14 |
 | roxmltree | 0.20.0 | MIT OR Apache-2.0 | https://crates.io/crates/roxmltree/0.20.0 |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT | https://crates.io/crates/rustc-hash/1.1.0 |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | https://crates.io/crates/rustc-hash/2.1.3 |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | https://crates.io/crates/rustc_version/0.4.1 |
 | rustix | 0.38.44 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/rustix/0.38.44 |
 | rustix | 1.1.6 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/rustix/1.1.6 |
+| rustls | 0.23.46 | Apache-2.0 OR ISC OR MIT | https://crates.io/crates/rustls/0.23.46 |
+| rustls-pki-types | 1.16.0 | MIT OR Apache-2.0 | https://crates.io/crates/rustls-pki-types/1.16.0 |
+| rustls-webpki | 0.103.17 | ISC | https://crates.io/crates/rustls-webpki/0.103.17 |
 | rustversion | 1.0.23 | MIT OR Apache-2.0 | https://crates.io/crates/rustversion/1.0.23 |
+| ryu | 1.0.23 | Apache-2.0 OR BSL-1.0 | https://crates.io/crates/ryu/1.0.23 |
 | same-file | 1.0.6 | Unlicense/MIT | https://crates.io/crates/same-file/1.0.6 |
 | scoped-tls | 1.0.1 | MIT/Apache-2.0 | https://crates.io/crates/scoped-tls/1.0.1 |
 | scopeguard | 1.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/scopeguard/1.2.0 |
@@ -304,6 +337,8 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | serde_json | 1.0.154 | MIT OR Apache-2.0 | https://crates.io/crates/serde_json/1.0.154 |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 | https://crates.io/crates/serde_repr/0.1.21 |
 | serde_spanned | 1.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/serde_spanned/1.1.3 |
+| serde_urlencoded | 0.7.1 | MIT/Apache-2.0 | https://crates.io/crates/serde_urlencoded/0.7.1 |
+| sha2 | 0.10.9 | MIT OR Apache-2.0 | https://crates.io/crates/sha2/0.10.9 |
 | shlex | 1.3.0 | MIT OR Apache-2.0 | https://crates.io/crates/shlex/1.3.0 |
 | shlex | 2.0.1 | MIT OR Apache-2.0 | https://crates.io/crates/shlex/2.0.1 |
 | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | https://crates.io/crates/signal-hook-registry/1.4.8 |
@@ -316,11 +351,13 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | smithay-client-toolkit | 0.20.0 | MIT | https://crates.io/crates/smithay-client-toolkit/0.20.0 |
 | smithay-clipboard | 0.7.3 | MIT | https://crates.io/crates/smithay-clipboard/0.7.3 |
 | smol_str | 0.2.2 | MIT OR Apache-2.0 | https://crates.io/crates/smol_str/0.2.2 |
+| socket2 | 0.6.5 | MIT OR Apache-2.0 | https://crates.io/crates/socket2/0.6.5 |
 | spirv | 0.3.0+sdk-1.3.268.0 | Apache-2.0 | https://crates.io/crates/spirv/0.3.0+sdk-1.3.268.0 |
 | stable_deref_trait | 1.2.1 | MIT OR Apache-2.0 | https://crates.io/crates/stable_deref_trait/1.2.1 |
 | static_assertions | 1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/static_assertions/1.1.0 |
 | strum | 0.26.3 | MIT | https://crates.io/crates/strum/0.26.3 |
 | strum_macros | 0.26.4 | MIT | https://crates.io/crates/strum_macros/0.26.4 |
+| subtle | 2.6.1 | BSD-3-Clause | https://crates.io/crates/subtle/2.6.1 |
 | symphonia | 0.5.5 | MPL-2.0 | https://crates.io/crates/symphonia/0.5.5 |
 | symphonia-bundle-flac | 0.5.5 | MPL-2.0 | https://crates.io/crates/symphonia-bundle-flac/0.5.5 |
 | symphonia-bundle-mp3 | 0.5.5 | MPL-2.0 | https://crates.io/crates/symphonia-bundle-mp3/0.5.5 |
@@ -339,6 +376,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | symphonia-utils-xiph | 0.5.5 | MPL-2.0 | https://crates.io/crates/symphonia-utils-xiph/0.5.5 |
 | syn | 2.0.119 | MIT OR Apache-2.0 | https://crates.io/crates/syn/2.0.119 |
 | syn | 3.0.10 | MIT OR Apache-2.0 | https://crates.io/crates/syn/3.0.10 |
+| sync_wrapper | 1.0.2 | Apache-2.0 | https://crates.io/crates/sync_wrapper/1.0.2 |
 | synstructure | 0.14.0 | MIT | https://crates.io/crates/synstructure/0.14.0 |
 | sysinfo | 0.37.2 | MIT | https://crates.io/crates/sysinfo/0.37.2 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | https://crates.io/crates/tempfile/3.27.0 |
@@ -349,23 +387,33 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | https://crates.io/crates/thiserror-impl/2.0.21 |
 | tiff | 0.11.3 | MIT | https://crates.io/crates/tiff/0.11.3 |
 | tinystr | 0.8.5 | Unicode-3.0 | https://crates.io/crates/tinystr/0.8.5 |
+| tinyvec | 1.13.3 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/tinyvec/1.13.3 |
 | tokio | 1.54.1 | MIT | https://crates.io/crates/tokio/1.54.1 |
+| tokio-rustls | 0.26.6 | MIT OR Apache-2.0 | https://crates.io/crates/tokio-rustls/0.26.6 |
 | toml | 1.2.1+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml/1.2.1+spec-1.1.0 |
 | toml_datetime | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_datetime/1.1.3+spec-1.1.0 |
 | toml_edit | 0.25.19+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_edit/0.25.19+spec-1.1.0 |
 | toml_parser | 1.1.5+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_parser/1.1.5+spec-1.1.0 |
 | toml_writer | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/toml_writer/1.2.0+spec-1.1.0 |
+| tower | 0.5.3 | MIT | https://crates.io/crates/tower/0.5.3 |
+| tower-http | 0.6.11 | MIT | https://crates.io/crates/tower-http/0.6.11 |
+| tower-layer | 0.3.3 | MIT | https://crates.io/crates/tower-layer/0.3.3 |
+| tower-service | 0.3.3 | MIT | https://crates.io/crates/tower-service/0.3.3 |
 | tracing | 0.1.44 | MIT | https://crates.io/crates/tracing/0.1.44 |
 | tracing-attributes | 0.1.31 | MIT | https://crates.io/crates/tracing-attributes/0.1.31 |
 | tracing-core | 0.1.36 | MIT | https://crates.io/crates/tracing-core/0.1.36 |
+| try-lock | 0.2.5 | MIT | https://crates.io/crates/try-lock/0.2.5 |
 | ttf-parser | 0.25.1 | MIT OR Apache-2.0 | https://crates.io/crates/ttf-parser/0.25.1 |
 | type-map | 0.5.1 | MIT/Apache-2.0 | https://crates.io/crates/type-map/0.5.1 |
+| typenum | 1.20.1 | MIT OR Apache-2.0 | https://crates.io/crates/typenum/1.20.1 |
 | uds_windows | 1.2.1 | MIT | https://crates.io/crates/uds_windows/1.2.1 |
 | unicode-bidi | 0.3.18 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-bidi/0.3.18 |
 | unicode-ident | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 | https://crates.io/crates/unicode-ident/1.0.27 |
+| unicode-normalization | 0.1.26 | (MIT OR Apache-2.0) AND Unicode-3.0 | https://crates.io/crates/unicode-normalization/0.1.26 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-segmentation/1.13.3 |
 | unicode-width | 0.1.14 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-width/0.1.14 |
 | unicode-xid | 0.2.6 | MIT OR Apache-2.0 | https://crates.io/crates/unicode-xid/0.2.6 |
+| untrusted | 0.9.0 | ISC | https://crates.io/crates/untrusted/0.9.0 |
 | url | 2.5.8 | MIT OR Apache-2.0 | https://crates.io/crates/url/2.5.8 |
 | urlencoding | 2.1.3 | MIT | https://crates.io/crates/urlencoding/2.1.3 |
 | utf8_iter | 1.1.0 | Apache-2.0 OR MIT | https://crates.io/crates/utf8_iter/1.1.0 |
@@ -373,6 +421,8 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | uuid | 1.29.2 | Apache-2.0 OR MIT | https://crates.io/crates/uuid/1.29.2 |
 | version_check | 0.9.5 | MIT/Apache-2.0 | https://crates.io/crates/version_check/0.9.5 |
 | walkdir | 2.5.0 | Unlicense/MIT | https://crates.io/crates/walkdir/2.5.0 |
+| want | 0.3.2 | MIT | https://crates.io/crates/want/0.3.2 |
+| wasi | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/wasi/0.11.1+wasi-snapshot-preview1 |
 | wasip2 | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/wasip2/1.0.4+wasi-0.2.12 |
 | wasm-bindgen | 0.2.130 | MIT OR Apache-2.0 | https://crates.io/crates/wasm-bindgen/0.2.130 |
 | wasm-bindgen-futures | 0.4.80 | MIT OR Apache-2.0 | https://crates.io/crates/wasm-bindgen-futures/0.4.80 |
@@ -392,6 +442,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | web-sys | 0.3.107 | MIT OR Apache-2.0 | https://crates.io/crates/web-sys/0.3.107 |
 | web-time | 1.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/web-time/1.1.0 |
 | webbrowser | 1.2.7 | MIT OR Apache-2.0 | https://crates.io/crates/webbrowser/1.2.7 |
+| webpki-roots | 1.0.12 | CDLA-Permissive-2.0 | https://crates.io/crates/webpki-roots/1.0.12 |
 | weezl | 0.1.12 | MIT OR Apache-2.0 | https://crates.io/crates/weezl/0.1.12 |
 | wgpu | 24.0.5 | MIT OR Apache-2.0 | https://crates.io/crates/wgpu/24.0.5 |
 | wgpu-core | 24.0.5 | MIT OR Apache-2.0 | https://crates.io/crates/wgpu-core/24.0.5 |
@@ -469,6 +520,7 @@ Prospekt DJ 2.2 BETA is AGPL-3.0-or-later. The inventory includes optional platf
 | zerocopy-derive | 0.8.63 | BSD-2-Clause OR Apache-2.0 OR MIT | https://crates.io/crates/zerocopy-derive/0.8.63 |
 | zerofrom | 0.1.8 | Unicode-3.0 | https://crates.io/crates/zerofrom/0.1.8 |
 | zerofrom-derive | 0.1.8 | Unicode-3.0 | https://crates.io/crates/zerofrom-derive/0.1.8 |
+| zeroize | 1.9.2 | Apache-2.0 OR MIT | https://crates.io/crates/zeroize/1.9.2 |
 | zerotrie | 0.2.5 | Unicode-3.0 | https://crates.io/crates/zerotrie/0.2.5 |
 | zerovec | 0.11.9 | Unicode-3.0 | https://crates.io/crates/zerovec/0.11.9 |
 | zerovec-derive | 0.11.7 | Unicode-3.0 | https://crates.io/crates/zerovec-derive/0.11.7 |
