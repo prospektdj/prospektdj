@@ -28,6 +28,11 @@ pub struct Entry {
     pub bytes: u64,
     pub bitrate: Option<u32>,
     pub modified: u64,
+    pub first_seen: i64,
+    pub year: Option<u32>,
+    pub rating: u8,
+    pub local_plays: u64,
+    pub local_last_play: Option<i64>,
     pub missing: bool,
 }
 impl Default for Entry {
@@ -47,6 +52,11 @@ impl Default for Entry {
             bytes: 0,
             bitrate: None,
             modified: 0,
+            first_seen: 0,
+            year: None,
+            rating: 0,
+            local_plays: 0,
+            local_last_play: None,
             missing: false,
         }
     }
@@ -70,6 +80,7 @@ impl Entry {
             return e;
         };
         e.bytes = stat.len();
+        e.first_seen = chrono::Utc::now().timestamp();
         e.modified = stat
             .modified()
             .ok()
@@ -86,6 +97,7 @@ impl Entry {
                 e.duration = Some(duration);
             }
             if let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) {
+                e.year = tag.year();
                 if let Some(s) = tag.title() {
                     e.title = s.into_owned();
                 }
@@ -235,6 +247,9 @@ pub struct Catalog {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Scope {
+    Recent,
+    Frequent,
+    Rating(u8),
     #[default]
     All,
     Favorites,
@@ -288,7 +303,13 @@ impl Catalog {
             .sync_all()?;
         std::fs::rename(tmp, path).context("Nie można zapisać katalogu muzyki")
     }
-    pub fn merge(&mut self, entry: Entry) {
+    pub fn merge(&mut self, mut entry: Entry) {
+        if let Some(previous) = self.entries.get(&entry.path) {
+            entry.first_seen = previous.first_seen;
+            entry.rating = previous.rating;
+            entry.local_plays = previous.local_plays;
+            entry.local_last_play = previous.local_last_play;
+        }
         self.schema = 2;
         self.entries.insert(entry.path.clone(), entry);
     }
@@ -315,6 +336,12 @@ impl Catalog {
             .filter(|(_, path)| {
                 let scope = match q.scope {
                     Scope::All => true,
+                    Scope::Recent | Scope::Frequent => {
+                        self.entries.get(*path).is_some_and(|e| e.local_plays > 0)
+                    }
+                    Scope::Rating(rating) => {
+                        self.entries.get(*path).is_some_and(|e| e.rating == *rating)
+                    }
                     Scope::Favorites => q.favorites.contains(*path),
                     Scope::Loaded => q.loaded.contains(&Some(path.as_path())),
                     Scope::Missing => self.entries.get(*path).is_some_and(|e| e.missing),
@@ -334,6 +361,17 @@ impl Catalog {
             .map(|(i, _)| i)
             .collect();
         rows.sort_by(|&a, &b| {
+            if matches!(q.scope, Scope::Recent | Scope::Frequent) {
+                let x = self.entries.get(&paths[a]);
+                let y = self.entries.get(&paths[b]);
+                let order = if *q.scope == Scope::Recent {
+                    y.and_then(|e| e.local_last_play)
+                        .cmp(&x.and_then(|e| e.local_last_play))
+                } else {
+                    y.map(|e| e.local_plays).cmp(&x.map(|e| e.local_plays))
+                };
+                return order.then_with(|| paths[a].cmp(&paths[b]));
+            }
             let x = self.entries.get(&paths[a]);
             let y = self.entries.get(&paths[b]);
             let order = match (x, y) {

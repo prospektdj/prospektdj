@@ -10,7 +10,18 @@ fn four_decks_mix_and_all_eight_cues_work_independently() {
     let mut engine = Engine::new(48000);
     engine.apply(Command::DeckCount(4));
     for i in 0..4 {
-        engine.apply(Command::Deck(i, DeckControl::Load(media::demo(i % 2))));
+        let source = media::demo(i % 2);
+        let frames = source
+            .frames
+            .iter()
+            .map(|f| [f[0] * (1. - i as f32 * 0.1), f[1] * (1. - i as f32 * 0.1)])
+            .collect();
+        let distinct = std::sync::Arc::new(media::Track::from_frames(
+            format!("Deck {i}"),
+            frames,
+            source.sample_rate,
+        ));
+        engine.apply(Command::Deck(i, DeckControl::Load(distinct)));
         engine.apply(Command::Deck(i, DeckControl::PadMode(PadMode::HotCue)));
         for p in 0..8 {
             engine.apply(Command::Deck(

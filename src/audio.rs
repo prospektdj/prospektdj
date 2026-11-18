@@ -68,7 +68,10 @@ pub fn start(
         )?)
     };
     let sender = if cue.is_some() { Some(cue_tx) } else { None };
-    let mut engine = Engine::new(rate);
+    let mut engine = Engine::with_store(
+        rate,
+        &crate::settings::config_path().with_file_name("tracks.sqlite"),
+    )?;
     let mut publish_count = 0u32;
     let mut next = move || {
         if publish_count == 0 {

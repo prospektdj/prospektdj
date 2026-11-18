@@ -48,7 +48,8 @@ impl Widget for Knob<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         let (min, max) = (*self.range.start(), *self.range.end());
         let width = self.size + 12.;
-        let height = self.size + 28.;
+        let compact = self.size <= 28.;
+        let height = self.size + if compact { 15. } else { 28. };
         let (rect, mut response) =
             ui.allocate_exact_size(Vec2::new(width, height), Sense::click_and_drag());
         let before = *self.value;
@@ -144,13 +145,15 @@ impl Widget for Knob<'_> {
         } else {
             format!("{:.0}{}", *self.value, self.unit)
         };
-        p.text(
-            egui::pos2(center.x, rect.top() + self.size + 10.),
-            egui::Align2::CENTER_CENTER,
-            value,
-            FontId::monospace(10.),
-            self.color,
-        );
+        if !compact {
+            p.text(
+                egui::pos2(center.x, rect.top() + self.size + 10.),
+                egui::Align2::CENTER_CENTER,
+                &value,
+                FontId::monospace(10.),
+                self.color,
+            );
+        }
         p.text(
             egui::pos2(center.x, rect.bottom() - 2.),
             egui::Align2::CENTER_BOTTOM,
@@ -161,9 +164,10 @@ impl Widget for Knob<'_> {
         response.widget_info(|| {
             egui::WidgetInfo::slider(ui.is_enabled(), *self.value as f64, self.label)
         });
-        response.on_hover_text(
-            "Przeciągnij góra/dół · kółko · strzałki · SHIFT: dokładnie · dwuklik: reset",
-        )
+        response.on_hover_text(format!(
+            "{}: {}\nPrzeciągnij góra/dół · kółko · strzałki · SHIFT: dokładnie · dwuklik: reset",
+            self.label, value
+        ))
     }
 }
 

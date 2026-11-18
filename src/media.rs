@@ -26,6 +26,8 @@ pub struct WaveBin {
 
 #[derive(Debug)]
 pub struct Track {
+    pub id: String,
+    pub file_bytes: u64,
     pub path: Option<PathBuf>,
     pub title: String,
     pub artist: String,
@@ -74,7 +76,19 @@ impl Track {
             .chunks(step)
             .map(|bins| std::array::from_fn(|c| bins.iter().fold(0f32, |a, b| a.max(b.bands[c]))))
             .collect();
+        use sha2::{Digest, Sha256};
+        let mut identity = Sha256::new();
+        identity.update(b"prospekt-source-pcm-v1");
+        identity.update(sample_rate.to_le_bytes());
+        for frame in &frames {
+            for channel in frame {
+                identity.update(channel.to_le_bytes());
+            }
+        }
+        let id = format!("pcm1:{:x}", identity.finalize());
         Self {
+            id,
+            file_bytes: 0,
             path: None,
             title,
             artist: String::new(),
@@ -138,6 +152,7 @@ pub fn load(path: &Path, auto_bpm: bool) -> Result<Arc<Track>> {
         .into_owned();
     let mut track = Track::from_frames(title, frames, sr);
     track.path = Some(path.to_path_buf());
+    track.file_bytes = metadata.len();
     let mut declared_bpm = None;
     if let Ok(tagged) = lofty::read_from_path(path) {
         if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {

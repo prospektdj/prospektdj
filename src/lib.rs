@@ -22,3 +22,11 @@ pub mod music_view;
 pub mod emoji_assets {
     include!(concat!(env!("OUT_DIR"), "/emoji_assets.rs"));
 }
+
+pub mod track_store;
+
+pub mod wave_style;
+
+pub mod library_data;
+
+pub mod dj_import;

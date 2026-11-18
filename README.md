@@ -1,5 +1,7 @@
 # Prospekt DJ — Rust Edition 2.3 PRE-BETA
 
+> **Rozwój 2.4 PRE-BETA / 2.4 PRE-BETA development:** trwa implementacja nowej aktualizacji. To nie jest ukończone wydanie. Zakres, ograniczenia i stan 11 punktów: [STATUS](docs/next-update/STATUS.md). / The next update is in progress; see the implementation status and remaining work. Existing release packages and screenshots describe the published 2.3 version.
+
 <p align="center"><img src="assets/logo.png" width="640" alt="Prospekt DJ PRE-BETA — grapefruit-pink logo" /></p>
 
 [Polski](#polski) | [English](#english)

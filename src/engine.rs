@@ -39,7 +39,11 @@ pub struct DeckView {
     pub cue: f64,
     pub hot: [Option<f64>; 8],
     pub loop_range: Option<(f64, f64)>,
+    pub saved_loop: Option<(f64, f64)>,
+    pub manual_in: Option<f64>,
     pub volume: f32,
+    /// Independent pre-fader gain, neutral at 0 dB.
+    pub gain_db: f32,
     pub eq: [f32; 3],
     pub pfl: bool,
     pub scratch: bool,
@@ -58,7 +62,10 @@ impl Default for DeckView {
             cue: 0.,
             hot: [None; 8],
             loop_range: None,
+            saved_loop: None,
+            manual_in: None,
             volume: 0.8,
+            gain_db: 0.,
             eq: [0.; 3],
             pfl: false,
             scratch: false,
@@ -76,8 +83,11 @@ pub struct Snapshot {
     pub sample_volume: f32,
     pub peak: f32,
     pub samples: [Option<(Arc<Track>, f64, f64)>; 4],
+    pub sample_playing: [bool; 4],
     pub recording: bool,
     pub recorded_seconds: f64,
+    pub database_failed: bool,
+    pub cue_revision: (u64, u64),
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -90,8 +100,11 @@ impl Default for Snapshot {
             sample_volume: 0.8,
             peak: 0.,
             samples: std::array::from_fn(|_| None),
+            sample_playing: [false; 4],
             recording: false,
             recorded_seconds: 0.,
+            database_failed: false,
+            cue_revision: (0, 0),
         }
     }
 }
@@ -110,6 +123,7 @@ pub enum DeckControl {
     Rate(f64),
     Bpm(f64),
     Volume(f32),
+    Gain(f32),
     Eq(usize, f32),
     Loop(f64),
     LoopOff,
@@ -140,6 +154,9 @@ pub enum Command {
     },
     CancelFade,
     PauseAll,
+    Barrier(Sender<()>),
+    HistoryThreshold(f64),
+    ImportedCues(String, crate::track_store::CueBank, (u64, u64)),
     Restore(Box<Snapshot>),
 }
 
@@ -149,9 +166,13 @@ struct Deck {
     frame: f64,
     filters: [Biquad; 3],
     smooth_gain: f32,
+    pre_gain: f32,
+    smooth_pre_gain: f32,
     jog: Option<(f64, u64)>,
     bend: f64,
-    manual_in: Option<f64>,
+    master_frames: u64,
+    performance: u64,
+    counted: bool,
     amp: f32,
 }
 impl Deck {
@@ -162,9 +183,13 @@ impl Deck {
             frame: 0.,
             filters: [Biquad::default(); 3],
             smooth_gain: 0.,
+            pre_gain: 1.,
+            smooth_pre_gain: 1.,
             jog: None,
             bend: 0.,
-            manual_in: None,
+            master_frames: 0,
+            performance: 0,
+            counted: false,
             amp: 0.,
         }
     }
@@ -202,9 +227,18 @@ pub struct Engine {
     limiter: f32,
     peak: f32,
     fade: Option<Fade>,
+    cue_banks: std::collections::HashMap<String, crate::track_store::CueBank>,
+    store: Option<crate::track_store::Store>,
+    history_threshold: f64,
+    instance: u64,
+    database_unavailable: bool,
+    cue_revision: u64,
 }
 impl Engine {
     pub fn new(sample_rate: u32) -> Self {
+        let _ = crate::track_store::session_start();
+        static INSTANCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let instance = INSTANCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
             deck_count: 2,
             decks: std::array::from_fn(|_| Deck::new(sample_rate)),
@@ -221,10 +255,52 @@ impl Engine {
             limiter: 1.,
             peak: 0.,
             fade: None,
+            cue_banks: Default::default(),
+            store: None,
+            history_threshold: 30.,
+            instance,
+            database_unavailable: false,
+            cue_revision: 0,
         }
+    }
+    pub fn with_store(sample_rate: u32, path: &std::path::Path) -> anyhow::Result<Self> {
+        let (store, banks) = crate::track_store::Store::open(path)?;
+        let mut engine = Self::new(sample_rate);
+        engine.cue_banks = banks;
+        engine.store = Some(store);
+        Ok(engine)
+    }
+    pub fn flush_store(&self) -> Result<(), String> {
+        self.store.as_ref().map_or(Ok(()), |store| store.flush())
     }
     pub fn apply(&mut self, command: Command) {
         match command {
+            Command::Barrier(ack) => {
+                let _ = ack.send(());
+            }
+            Command::ImportedCues(id, mut bank, expected) => {
+                if expected != (self.instance, self.cue_revision) {
+                    if let Some(current) = self.cue_banks.get(&id) {
+                        bank = *current;
+                        if let Some(store) = &self.store {
+                            store.cues(&id, bank);
+                        }
+                    }
+                }
+                self.cue_banks.insert(id.clone(), bank);
+                for deck in &mut self.decks {
+                    if deck.view.track.as_ref().is_some_and(|t| t.id == id) {
+                        deck.view.hot = bank;
+                    }
+                }
+            }
+            Command::HistoryThreshold(seconds) => {
+                self.history_threshold = if seconds.is_finite() {
+                    seconds.clamp(1., 300.)
+                } else {
+                    30.
+                }
+            }
             Command::DeckCount(count) => {
                 self.deck_count = if count == 4 { 4 } else { 2 };
                 for d in self.decks.iter_mut().skip(self.deck_count) {
@@ -300,6 +376,11 @@ impl Engine {
                         self.deck_control(i, DeckControl::Load(track.clone()));
                         self.decks[i].frame = s.decks[i].position * track.sample_rate as f64;
                         self.decks[i].view = s.decks[i].clone();
+                        self.decks[i].pre_gain = 10_f32.powf(s.decks[i].gain_db / 20.);
+                        self.cue_banks.insert(track.id.clone(), s.decks[i].hot);
+                        if let Some(store) = &self.store {
+                            store.cues(&track.id, s.decks[i].hot);
+                        }
                         for b in 0..3 {
                             self.decks[i].filters[b].configure(
                                 b,
@@ -323,6 +404,7 @@ impl Engine {
     }
     fn deck_control(&mut self, i: usize, control: DeckControl) {
         let d = &mut self.decks[i];
+        let previous_hot = d.view.hot;
         match control {
             DeckControl::FxParam(param, value) => d.view.fx.set(param, value),
             DeckControl::FxToggle(switch) => d.view.fx.toggle(switch),
@@ -331,11 +413,14 @@ impl Engine {
                 d.effects.configure(d.view.fx, d.view.bpm * d.view.rate);
             }
             DeckControl::Load(track) => {
+                let hot = self.cue_banks.get(&track.id).copied().unwrap_or([None; 8]);
                 d.view = DeckView {
+                    hot,
                     fx: d.view.fx,
                     bpm: track.bpm,
                     track: Some(track),
                     volume: d.view.volume,
+                    gain_db: d.view.gain_db,
                     eq: d.view.eq,
                     pfl: d.view.pfl,
                     mode: d.view.mode,
@@ -343,7 +428,10 @@ impl Engine {
                     ..Default::default()
                 };
                 d.frame = 0.;
-                d.manual_in = None;
+                d.master_frames = 0;
+                d.counted = false;
+                d.performance = d.performance.wrapping_add(1);
+                d.view.manual_in = None;
                 d.jog = None;
                 d.bend = 0.;
                 d.amp = 0.;
@@ -367,6 +455,9 @@ impl Engine {
                 if let Some(t) = &d.view.track {
                     if d.frame >= t.frames.len() as f64 {
                         d.frame = 0.;
+                        d.master_frames = 0;
+                        d.counted = false;
+                        d.performance = d.performance.wrapping_add(1);
                     }
                     d.view.playing = true;
                 }
@@ -396,6 +487,12 @@ impl Engine {
             }
             DeckControl::Rate(rate) => d.view.rate = rate.clamp(0.5, 1.5),
             DeckControl::Bpm(bpm) => d.view.bpm = bpm.clamp(40., 300.),
+            DeckControl::Gain(v) => {
+                if v.is_finite() {
+                    d.view.gain_db = v.clamp(-24., 12.);
+                    d.pre_gain = 10_f32.powf(d.view.gain_db / 20.);
+                }
+            }
             DeckControl::Volume(v) => d.view.volume = v.clamp(0., 1.),
             DeckControl::Eq(b, g) if b < 3 => {
                 d.view.eq[b] = g.clamp(-24., 12.);
@@ -410,7 +507,12 @@ impl Engine {
                     }
                 }
             }
-            DeckControl::LoopOff => d.view.loop_range = None,
+            DeckControl::LoopOff => {
+                if d.view.loop_range.is_some() {
+                    d.view.saved_loop = d.view.loop_range;
+                }
+                d.view.loop_range = None;
+            }
             DeckControl::LoopScale(scale) => {
                 if let (Some((a, b)), Some(track)) = (d.view.loop_range, d.view.track.as_ref()) {
                     let end = (a + (b - a) * scale.clamp(0.5, 2.)).min(track.duration());
@@ -488,16 +590,24 @@ impl Engine {
                         self.deck_control(i, DeckControl::Loop([1., 2., 4., 8.][p]));
                     }
                     PadMode::ManualLoop => match p {
-                        0 => d.manual_in = Some(pos),
+                        0 => d.view.manual_in = Some(pos),
                         1 => {
-                            if let Some(start) = d.manual_in {
+                            if let Some(start) = d.view.manual_in {
                                 if pos - start > 0.01 {
                                     d.view.loop_range = Some((start, pos));
                                 }
                             }
                         }
-                        2 => d.view.loop_range = None,
+                        2 => {
+                            if d.view.loop_range.is_some() {
+                                d.view.saved_loop = d.view.loop_range;
+                            }
+                            d.view.loop_range = None;
+                        }
                         3 => {
+                            if d.view.loop_range.is_none() {
+                                d.view.loop_range = d.view.saved_loop;
+                            }
                             if let Some((a, _)) = d.view.loop_range {
                                 d.frame = a * t.sample_rate as f64;
                             }
@@ -508,6 +618,23 @@ impl Engine {
                 }
             }
             _ => {}
+        }
+        let d = &self.decks[i];
+        if previous_hot != d.view.hot {
+            self.cue_revision = self.cue_revision.wrapping_add(1);
+            if let Some(track) = &d.view.track {
+                let id = track.id.clone();
+                let bank = d.view.hot;
+                self.cue_banks.insert(id.clone(), bank);
+                if let Some(store) = &self.store {
+                    store.cues(&id, bank);
+                }
+                for other in &mut self.decks {
+                    if other.view.track.as_ref().is_some_and(|t| t.id == id) {
+                        other.view.hot = bank;
+                    }
+                }
+            }
         }
     }
     fn trigger(&mut self, i: usize) {
@@ -549,11 +676,42 @@ impl Engine {
                     d.jog = None;
                 }
             }
+            let threshold = if track.duration() < 60. {
+                self.history_threshold.min(track.duration() * 0.5)
+            } else {
+                self.history_threshold
+            };
+            if d.view.playing
+                && d.frame >= 0.
+                && d.frame < track.frames.len() as f64
+                && d.view.volume > 0.
+                && gains[i % 2] > 0.0001
+                && self.master > 0.
+            {
+                d.master_frames = d.master_frames.saturating_add(1);
+                if !d.counted && d.master_frames as f64 / self.sample_rate as f64 >= threshold {
+                    d.counted = true;
+                    if let Some(store) = &self.store {
+                        store.play(
+                            format!(
+                                "{}-{}-{}-{}-{}",
+                                crate::track_store::session_start(),
+                                std::process::id(),
+                                self.instance,
+                                i,
+                                d.performance
+                            ),
+                            track.id.clone(),
+                        );
+                    }
+                }
+            }
             let active = speed != 0. && d.frame >= 0. && d.frame < track.frames.len() as f64;
             d.amp += (if active { 1. } else { 0. } - d.amp) * 0.04;
             let mut frame = track.sample(d.frame);
+            d.smooth_pre_gain += (d.pre_gain - d.smooth_pre_gain) * 0.002;
             for x in &mut frame {
-                *x *= d.amp;
+                *x *= d.amp * d.smooth_pre_gain;
             }
             for f in &mut d.filters {
                 frame = f.process(frame);
@@ -658,8 +816,12 @@ impl Engine {
                     .as_ref()
                     .map(|s| (s.track.clone(), s.start, s.end))
             }),
+            sample_playing: std::array::from_fn(|i| self.voices[i].is_some()),
             recording: self.capture.is_some(),
             recorded_seconds: self.recorded as f64 / self.sample_rate as f64,
+            cue_revision: (self.instance, self.cue_revision),
+            database_failed: self.database_unavailable
+                || self.store.as_ref().is_some_and(|s| s.failed()),
         }
     }
 }
@@ -667,7 +829,18 @@ impl Engine {
 // Used only when no output device exists. Commands and metadata stay usable,
 // but this deliberately does not advance audio or pretend playback works.
 pub fn offline(rx: Receiver<Command>, view: Arc<Mutex<Snapshot>>, stop: Receiver<()>) {
-    let mut engine = Engine::new(48000);
+    let mut engine = match Engine::with_store(
+        48000,
+        &crate::settings::config_path().with_file_name("tracks.sqlite"),
+    ) {
+        Ok(engine) => engine,
+        Err(error) => {
+            eprintln!("Track database: {error:#}");
+            let mut engine = Engine::new(48000);
+            engine.database_unavailable = true;
+            engine
+        }
+    };
     while stop.try_recv().is_err() {
         while let Ok(command) = rx.try_recv() {
             engine.apply(command);

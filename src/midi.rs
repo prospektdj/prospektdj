@@ -258,6 +258,7 @@ pub fn actions() -> Vec<String> {
             "load",
             "pitch",
             "gain",
+            "pre_gain",
             "jog",
             "hot",
             "auto",

@@ -3,6 +3,8 @@ use std::{path::PathBuf, time::Duration};
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
     pub cpu: f32,
+    pub ram_used: u64,
+    pub ram_total: u64,
     pub disk_used: f32,
     pub available: u64,
     pub disk: String,
@@ -23,6 +25,7 @@ impl Monitor {
             system.refresh_cpu_usage();
             while done.recv_timeout(Duration::from_secs(1)).is_err() {
                 system.refresh_cpu_usage();
+                system.refresh_memory();
                 disks.refresh(true);
                 let disk = disks
                     .list()
@@ -31,6 +34,8 @@ impl Monitor {
                     .max_by_key(|d| d.mount_point().as_os_str().len());
                 let mut stats = Stats {
                     cpu: system.global_cpu_usage().clamp(0., 100.),
+                    ram_used: system.used_memory(),
+                    ram_total: system.total_memory(),
                     ..Default::default()
                 };
                 if let Some(d) = disk {

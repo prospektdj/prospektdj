@@ -11,8 +11,16 @@ pub struct Settings {
     pub library_sort: crate::library::Sort,
     pub library_descending: bool,
     pub show_effects: bool,
+    pub wave_style: crate::wave_style::WaveStyle,
+    pub reduced_motion: bool,
+    pub ui_scale: f32,
+    pub refresh_hz: u32,
+    pub show_statistics: bool,
     pub cover_strip: bool,
     pub track_preview: bool,
+    pub preview_column: bool,
+    pub history_threshold: f64,
+    pub import_prompt_seen: bool,
     pub auto_cover_download: bool,
     pub key_camelot: bool,
     pub tree_width: f32,
@@ -50,14 +58,22 @@ impl Default for Settings {
             library_sort: crate::library::Sort::Title,
             library_descending: false,
             show_effects: false,
+            wave_style: Default::default(),
+            reduced_motion: false,
+            ui_scale: 1.,
+            refresh_hz: 30,
+            show_statistics: true,
             cover_strip: true,
             track_preview: true,
+            preview_column: true,
+            history_threshold: 30.,
+            import_prompt_seen: false,
             auto_cover_download: true,
             key_camelot: true,
             tree_width: 210.,
             tree_open: BTreeSet::new(),
             library_scope: crate::library::Scope::All,
-            dock_tab: 1,
+            dock_tab: 2,
             light: false,
             deck_count: 2,
             language: "pl".into(),
@@ -102,6 +118,10 @@ pub fn load() -> Settings {
     s.width = s.width.clamp(1000., 3840.);
     s.height = s.height.clamp(720., 2160.);
     s.dock_tab = s.dock_tab.min(2);
+    if s.dock_tab == 1 {
+        s.dock_tab = 2;
+        s.show_effects = false;
+    }
     s.deck_count = if s.deck_count == 4 { 4 } else { 2 };
     s.effects.resize(4, crate::effects::FxSettings::default());
     s.effects.truncate(4);
