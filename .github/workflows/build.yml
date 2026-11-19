@@ -16,6 +16,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - name: Windows ASIO SDK and LLVM
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-asio
       - uses: Swatinem/rust-cache@v2
       - name: Linux build dependencies
         if: runner.os == 'Linux'
@@ -30,6 +33,7 @@ jobs:
           path: |
             target/release/prospekt-dj
             target/release/prospekt-dj.exe
+            release-dist/ASIO-SDK-2.3.4-GPL3-source.zip
             README.md
             LICENSE
             licenses/

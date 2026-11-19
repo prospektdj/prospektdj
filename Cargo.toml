@@ -1,6 +1,6 @@
 [package]
 name = "prospekt-dj"
-version = "2.4.0-prebeta.1"
+version = "2.4.1-prebeta.1"
 edition = "2021"
 rust-version = "1.89"
 description = "PRE-BETA open source DJ studio for Windows and Linux"
@@ -18,7 +18,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 sysinfo = { version = "0.37", default-features = false, features = ["system", "disk"] }
 ttf-parser = "0.25"
 anyhow = "1"
-cpal = "0.15.3"
+cpal = "0.17.3"
 crossbeam-channel = "0.5"
 directories = "6"
 eframe = { version = "0.31.1", default-features = false, features = ["default_fonts", "glow", "x11"] }
@@ -26,7 +26,7 @@ egui = "0.31.1"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 lofty = "0.22"
-midir = "0.10"
+midir = "0.11"
 rand = "0.9"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
@@ -36,6 +36,10 @@ walkdir = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 csv = "1"
 url = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+cpal = { version = "0.17.3", features = ["asio"] }
+asio-sys = "0.2.6"
 
 [build-dependencies]
 winresource = "0.1"

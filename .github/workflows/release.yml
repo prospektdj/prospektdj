@@ -38,6 +38,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
           components: clippy, rustfmt
+      - name: Windows ASIO SDK and LLVM
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-asio
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.target }}

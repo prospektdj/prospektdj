@@ -270,6 +270,25 @@ impl Engine {
         engine.store = Some(store);
         Ok(engine)
     }
+    /// Persistence failure must not prevent otherwise usable audio hardware from opening.
+    pub fn with_store_or_memory(
+        sample_rate: u32,
+        path: &std::path::Path,
+    ) -> (Self, Option<String>) {
+        match Self::with_store(sample_rate, path) {
+            Ok(engine) => (engine, None),
+            Err(error) => {
+                let mut engine = Self::new(sample_rate);
+                engine.database_unavailable = true;
+                (
+                    engine,
+                    Some(format!(
+                        "Track database unavailable; session-only Cue bank: {error:#}"
+                    )),
+                )
+            }
+        }
+    }
     pub fn flush_store(&self) -> Result<(), String> {
         self.store.as_ref().map_or(Ok(()), |store| store.flush())
     }
@@ -375,11 +394,17 @@ impl Engine {
                     if let Some(track) = &s.decks[i].track {
                         self.deck_control(i, DeckControl::Load(track.clone()));
                         self.decks[i].frame = s.decks[i].position * track.sample_rate as f64;
+                        let restored_hot = self
+                            .cue_banks
+                            .get(&track.id)
+                            .copied()
+                            .unwrap_or(s.decks[i].hot);
                         self.decks[i].view = s.decks[i].clone();
+                        self.decks[i].view.hot = restored_hot;
                         self.decks[i].pre_gain = 10_f32.powf(s.decks[i].gain_db / 20.);
-                        self.cue_banks.insert(track.id.clone(), s.decks[i].hot);
+                        self.cue_banks.insert(track.id.clone(), restored_hot);
                         if let Some(store) = &self.store {
-                            store.cues(&track.id, s.decks[i].hot);
+                            store.cues(&track.id, restored_hot);
                         }
                         for b in 0..3 {
                             self.decks[i].filters[b].configure(
@@ -823,6 +848,13 @@ impl Engine {
             database_failed: self.database_unavailable
                 || self.store.as_ref().is_some_and(|s| s.failed()),
         }
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        self.flush_capture();
+        self.capture = None;
     }
 }
 

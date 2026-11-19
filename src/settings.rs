@@ -38,6 +38,10 @@ pub struct Settings {
     pub master_device: String,
     pub cue_device: String,
     pub latency_ms: u32,
+    pub audio_backend: crate::audio::Backend,
+    pub audio_buffer_frames: Option<u32>,
+    pub audio_master_pair: u16,
+    pub audio_cue_pair: Option<u16>,
     pub format: Format,
     pub auto_bpm: bool,
     pub fade_seconds: f64,
@@ -85,6 +89,10 @@ impl Default for Settings {
             master_device: String::new(),
             cue_device: String::new(),
             latency_ms: 12,
+            audio_backend: Default::default(),
+            audio_buffer_frames: None,
+            audio_master_pair: 0,
+            audio_cue_pair: None,
             format: Format::Wav,
             auto_bpm: true,
             fade_seconds: 8.,
@@ -114,7 +122,15 @@ pub fn load() -> Settings {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     s.fade_seconds = s.fade_seconds.clamp(1., 30.);
-    s.latency_ms = s.latency_ms.clamp(3, 100);
+    s.latency_ms = s.latency_ms.clamp(3, 100); // Retained for old configuration files.
+    s.audio_buffer_frames = s.audio_buffer_frames.filter(|n| (16..=8192).contains(n));
+    s.audio_master_pair = s.audio_master_pair.min(30) / 2 * 2;
+    s.audio_cue_pair = s.audio_cue_pair.filter(|n| *n <= 30 && n.is_multiple_of(2));
+    if !cfg!(target_os = "windows") && s.audio_backend == crate::audio::Backend::Asio {
+        s.audio_backend = crate::audio::Backend::System;
+        s.master_device.clear();
+    }
+
     s.width = s.width.clamp(1000., 3840.);
     s.height = s.height.clamp(720., 2160.);
     s.dock_tab = s.dock_tab.min(2);

@@ -1,0 +1,17 @@
+name: Prepare verified GPLv3 ASIO SDK
+description: Set up libclang and pinned Steinberg ASIO SDK sources for Windows builds
+runs:
+  using: composite
+  steps:
+    - name: Locate LLVM libclang
+      shell: pwsh
+      run: |
+        $paths = @('C:\Program Files\LLVM\bin')
+        $clang = Get-Command clang -ErrorAction SilentlyContinue
+        if ($clang) { $paths += Split-Path $clang.Source }
+        $directory = $paths | Where-Object { Test-Path (Join-Path $_ 'libclang.dll') } | Select-Object -First 1
+        if (-not $directory) { throw 'LLVM libclang.dll is required to build ASIO bindings.' }
+        "LIBCLANG_PATH=$directory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    - name: Verify and prepare ASIO SDK and corresponding source archive
+      shell: pwsh
+      run: python scripts/prepare_asio_sdk.py --output "$env:RUNNER_TEMP\prospekt-asio-sdk" --archive-output release-dist/ASIO-SDK-2.3.4-GPL3-source.zip

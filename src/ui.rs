@@ -1,6 +1,7 @@
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use egui::{Align, Color32, FontId, RichText, Sense, Stroke, Vec2};
 use prospekt_dj::i18n::{self, tr};
+use prospekt_dj::theme::apply as console_theme;
 use prospekt_dj::{
     audio::{self, AudioRuntime},
     engine::{self, Command, DeckControl, DeckView, PadMode, Snapshot},
@@ -195,6 +196,7 @@ pub struct Studio {
     encoding: Encoding,
     last_midi: String,
     outputs: Vec<String>,
+    audio_diagnostics: String,
     bend: [f64; 4],
     bend_slider: [f64; 4],
     bend_buttons: [f64; 4],
@@ -362,6 +364,7 @@ impl Studio {
             encoding: Encoding::default(),
             last_midi: String::new(),
             outputs: Vec::new(),
+            audio_diagnostics: String::new(),
             bend: [0.; 4],
             bend_slider: [0.; 4],
             bend_buttons: [0.; 4],
@@ -431,7 +434,7 @@ impl Studio {
         self.send(Command::Deck(i, control));
     }
     fn play(&mut self, i: usize) {
-        if self.runtime.is_none() {
+        if !self.runtime.as_ref().is_some_and(|r| r.is_running()) {
             self.status = "Brak wyjścia audio. Wybierz urządzenie w Ustawieniach.".into();
             return;
         }
@@ -450,24 +453,40 @@ impl Studio {
             let _ = thread.join();
         }
         while self.rx.try_recv().is_ok() {}
-        match audio::start(
+        let options = audio::Options {
+            backend: self.settings.audio_backend,
+            master_name: self.settings.master_device.clone(),
+            cue_name: self.settings.cue_device.clone(),
+            buffer_frames: self.settings.audio_buffer_frames,
+            master_pair: self.settings.audio_master_pair,
+            cue_pair: self.settings.audio_cue_pair,
+        };
+        match audio::start_with_options(
             self.rx.clone(),
             self.shared.clone(),
             self.error_tx.clone(),
-            &self.settings.master_device,
-            &self.settings.cue_device,
-            self.settings.latency_ms,
+            &options,
         ) {
             Ok(runtime) => {
+                self.audio_diagnostics = runtime.diagnostics();
+                audio::save_diagnostics(&self.audio_diagnostics);
                 self.status = format!(
-                    "Silnik Rust · {} Hz · bufor około {:.1} ms",
-                    runtime.sample_rate, runtime.latency_ms
+                    "{} · {} · {} Hz{}",
+                    runtime.backend.label(),
+                    runtime.device_name,
+                    runtime.sample_rate,
+                    if runtime.warnings.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" · {}", runtime.warnings.join(" | "))
+                    }
                 );
                 self.runtime = Some(runtime);
             }
             Err(e) => {
-                self.status =
-                    format!("Audio niedostępne: {e}. Możesz wybrać inne wyjście w ustawieniach.");
+                self.audio_diagnostics=format!("Prospekt DJ {} PRE-BETA\n{}\nOS: {} {}\nRequested configuration: {options:?}\nAudio startup error: {e:#}",env!("CARGO_PKG_VERSION"),chrono::Local::now().to_rfc3339(),std::env::consts::OS,std::env::consts::ARCH);
+                audio::save_diagnostics(&self.audio_diagnostics);
+                self.status = format!("Audio niedostępne: {e:#}. Szczegóły: Ustawienia → Audio.");
                 let (stop, done) = bounded(1);
                 let rx = self.rx.clone();
                 let view = self.shared.clone();
@@ -730,7 +749,26 @@ impl Studio {
             }
         }
         for error in self.errors.try_iter() {
+            self.audio_diagnostics
+                .push_str(&format!("\n{}: {error}", chrono::Local::now().to_rfc3339()));
+            audio::save_diagnostics(&self.audio_diagnostics);
             self.status = error;
+        }
+        if self.runtime.as_ref().is_some_and(|r| !r.is_running()) {
+            self.stop_auto();
+            self.runtime = None;
+            while self.rx.try_recv().is_ok() {}
+            let (stop, done) = bounded(1);
+            let rx = self.rx.clone();
+            let view = self.shared.clone();
+            let thread = std::thread::spawn(move || engine::offline(rx, view, done));
+            self.offline = Some((stop, thread));
+            for deck in &mut self.snapshot.decks {
+                deck.playing = false;
+            }
+            self.send(Command::Restore(Box::new(self.snapshot.clone())));
+            self.send(Command::HistoryThreshold(self.settings.history_threshold));
+            self.status="Audio zatrzymane przez urządzenie. Ustawienia → Audio: wybierz wyjście i ponów uruchomienie. Nagranie jest kończone; szczegóły w diagnostyce.".into();
         }
         while let Ok(work) = self.work.try_recv() {
             match work {
@@ -1241,7 +1279,7 @@ impl Studio {
                         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                             if ui.button(tr("Ustawienia")).clicked() {
                                 self.settings_open = true;
-                                self.outputs = audio::output_names();
+                                self.refresh_audio_outputs();
                                 self.midi_names = midi::inputs();
                             }
                             if ui.button("F11").clicked() {
@@ -1250,7 +1288,7 @@ impl Studio {
                             ui.toggle_value(&mut self.library_focus, tr("BIBLIOTEKA"));
                             self.header_audio_controls(ui);
                             if ui
-                                .small_button(if self.runtime.is_some() {
+                                .small_button(if self.runtime.as_ref().is_some_and(|r|r.is_running()) {
                                     "AUDIO ON"
                                 } else {
                                     "AUDIO OFF"
@@ -1259,7 +1297,7 @@ impl Studio {
                             {
                                 self.settings_open = true;
                                 self.settings_tab = 0;
-                                self.outputs = audio::output_names();
+                                self.refresh_audio_outputs();
                             }
                         });
                     },
@@ -3854,6 +3892,169 @@ impl Studio {
                 .display()
         ));
     }
+    fn refresh_audio_outputs(&mut self) {
+        match audio::output_names_for(self.settings.audio_backend) {
+            Ok(outputs) => self.outputs = outputs,
+            Err(e) => {
+                self.outputs.clear();
+                self.audio_diagnostics = format!("Device enumeration error: {e:#}");
+                self.status = self.audio_diagnostics.clone();
+            }
+        }
+    }
+    fn audio_settings_ui(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Audio · WASAPI / ASIO");
+        let previous = self.settings.audio_backend;
+        egui::ComboBox::from_id_salt("audio-backend")
+            .selected_text(self.settings.audio_backend.label())
+            .show_ui(ui, |ui| {
+                for backend in audio::backends() {
+                    ui.selectable_value(&mut self.settings.audio_backend, backend, backend.label());
+                }
+            });
+        if previous != self.settings.audio_backend {
+            self.settings.master_device.clear();
+            self.refresh_audio_outputs();
+        }
+        if ui.button(tr("Odśwież urządzenia")).clicked() {
+            self.refresh_audio_outputs();
+        }
+        egui::ComboBox::from_id_salt("master-output")
+            .selected_text(if self.settings.master_device.is_empty() {
+                "MASTER: domyślne / pierwszy sterownik"
+            } else {
+                &self.settings.master_device
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut self.settings.master_device,
+                    String::new(),
+                    "Domyślne wyjście / pierwszy sterownik",
+                );
+                for name in &self.outputs {
+                    ui.selectable_value(&mut self.settings.master_device, name.clone(), name);
+                }
+            });
+        egui::ComboBox::from_id_salt("audio-buffer")
+            .selected_text(
+                self.settings
+                    .audio_buffer_frames
+                    .map(|n| format!("{n} próbek"))
+                    .unwrap_or_else(|| "Bufor sterownika — zalecane".into()),
+            )
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut self.settings.audio_buffer_frames,
+                    None,
+                    "Bufor sterownika — zalecane",
+                );
+                for n in [64, 128, 256, 512, 1024, 2048] {
+                    ui.selectable_value(
+                        &mut self.settings.audio_buffer_frames,
+                        Some(n),
+                        format!("{n} próbek"),
+                    );
+                }
+            });
+        if self.settings.audio_backend == audio::Backend::Asio {
+            ui.label("Zainstaluj 64-bitowy sterownik ASIO producenta interfejsu. Realtek zwykle używa WASAPI; ASIO nie jest wymagane do standardowego dźwięku Windows.");
+            egui::ComboBox::from_id_salt("asio-master-pair")
+                .selected_text(format!(
+                    "MASTER: {}–{}",
+                    self.settings.audio_master_pair + 1,
+                    self.settings.audio_master_pair + 2
+                ))
+                .show_ui(ui, |ui| {
+                    for n in (0..32).step_by(2) {
+                        ui.selectable_value(
+                            &mut self.settings.audio_master_pair,
+                            n,
+                            format!("{}–{}", n + 1, n + 2),
+                        );
+                    }
+                });
+            egui::ComboBox::from_id_salt("asio-cue-pair")
+                .selected_text(
+                    self.settings
+                        .audio_cue_pair
+                        .map(|n| format!("PFL: {}–{}", n + 1, n + 2))
+                        .unwrap_or_else(|| "PFL: wyłączony".into()),
+                )
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.settings.audio_cue_pair, None, "PFL: wyłączony");
+                    for n in (0..32).step_by(2) {
+                        if n != self.settings.audio_master_pair {
+                            ui.selectable_value(
+                                &mut self.settings.audio_cue_pair,
+                                Some(n),
+                                format!("{}–{}", n + 1, n + 2),
+                            );
+                        }
+                    }
+                });
+            ui.label("ASIO otwiera jeden sterownik; MASTER i PFL mogą używać różnych par jego kanałów. Niedostępna para wywoła czytelny błąd.");
+        } else {
+            ui.label("Realtek: wybierz WASAPI, domyślne wyjście lub Speakers / Realtek Audio i bufor sterownika. Włącz głośniki w Ustawieniach dźwięku Windows.");
+            egui::ComboBox::from_id_salt("cue-output")
+                .selected_text(if self.settings.cue_device.is_empty() {
+                    "PFL: wyłączony"
+                } else {
+                    &self.settings.cue_device
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.settings.cue_device,
+                        String::new(),
+                        tr("Odsłuch wyłączony"),
+                    );
+                    for name in &self.outputs {
+                        ui.selectable_value(&mut self.settings.cue_device, name.clone(), name);
+                    }
+                });
+            ui.label("PFL przez WASAPI wymaga osobnego urządzenia. Niedostępny odsłuch nie wyłącza MASTER.");
+        }
+        let busy = self.record_result.is_some() || self.snapshot.decks.iter().any(|d| d.playing);
+        if ui
+            .add_enabled(
+                !busy,
+                egui::Button::new("Zastosuj / ponów uruchomienie audio"),
+            )
+            .clicked()
+        {
+            self.restart_audio();
+        }
+        ui.label("Zatrzymaj decki i nagrywanie przed zmianą sterownika. Podany blok callbacku nie jest pomiarem latencji sprzętu.");
+        if let Some(runtime) = &self.runtime {
+            ui.label(runtime.buffer_description());
+        }
+        if ui.button("Kopiuj diagnostykę audio").clicked() {
+            let text = self
+                .runtime
+                .as_ref()
+                .map(|r| {
+                    format!(
+                        "{}\nStartup log:\n{}",
+                        r.diagnostics(),
+                        self.audio_diagnostics
+                    )
+                })
+                .unwrap_or_else(|| self.audio_diagnostics.clone());
+            audio::save_diagnostics(&text);
+            ui.ctx().copy_text(text);
+        }
+        ui.label(format!(
+            "Plik diagnostyki: {}",
+            audio::diagnostic_path().display()
+        ));
+        ui.collapsing("Szczegóły uruchomienia / błędu", |ui| {
+            let mut text = self.audio_diagnostics.as_str();
+            ui.add(
+                egui::TextEdit::multiline(&mut text)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(8),
+            );
+        });
+    }
     fn settings_ui(&mut self, ctx: &egui::Context) {
         let mut open = self.settings_open;
         egui::Window::new(tr("Ustawienia studia")).id(egui::Id::new("studio-settings")).default_pos(egui::pos2(((ctx.screen_rect().width()-840.)/2.).max(0.),80.)).open(&mut open).default_width(840.).resizable(true).show(ctx,|ui|{ egui::ScrollArea::vertical().max_height((ctx.screen_rect().height()-160.).max(300.)).show(ui,|ui|{
@@ -3892,15 +4093,7 @@ impl Studio {
                     if ui.button("Przywróć domyślne").clicked(){self.settings.wave_style=Default::default();}
                 },
                 0=>{
-                    ui.heading("Silnik audio · CPAL");
-                    if ui.button(tr("Odśwież urządzenia")).clicked(){self.outputs=audio::output_names();}
-                    egui::ComboBox::from_id_salt("master-output").selected_text(if self.settings.master_device.is_empty(){"MASTER: domyślne"}else{&self.settings.master_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.master_device,String::new(),tr("Domyślne wyjście systemowe"));for name in &self.outputs{ui.selectable_value(&mut self.settings.master_device,name.clone(),name);}});
-                    egui::ComboBox::from_id_salt("cue-output").selected_text(if self.settings.cue_device.is_empty(){"SŁUCHAWKI: wyłączone"}else{&self.settings.cue_device}).show_ui(ui,|ui|{ui.selectable_value(&mut self.settings.cue_device,String::new(),tr("Odsłuch wyłączony"));for name in &self.outputs{ui.selectable_value(&mut self.settings.cue_device,name.clone(),name);}});
-                    ui.add(egui::Slider::new(&mut self.settings.latency_ms,3..=100).suffix(" ms").text("Preferowany bufor"));
-                    let busy=self.record_result.is_some()||self.snapshot.decks.iter().any(|d|d.playing);
-                    if ui.add_enabled(!busy,egui::Button::new(tr("Zastosuj urządzenia audio"))).clicked(){self.restart_audio();}
-                    ui.label("Przed zmianą wyjść zatrzymaj odtwarzanie i nagrywanie. Rozmiar bufora zależy od sterownika. Ustawienie nie jest pomiarem całkowitej latencji.");
-                    ui.label("Osobny odsłuch wymaga niezależnego urządzenia systemowego. Brak rozdzielania par 1/2 i 3/4 pojedynczej karty.");
+                    self.audio_settings_ui(ui);
                     ui.separator();ui.heading(tr("Nagrywanie"));
                     egui::ComboBox::from_id_salt("record-format").selected_text(self.settings.format.extension().to_uppercase()).show_ui(ui,|ui|{for format in recording::Format::ALL{ui.selectable_value(&mut self.settings.format,format,format.extension().to_uppercase());}});
                     ui.label("WAV i AIFF zapisuje kod Rust. MP3, FLAC i Ogg/Opus wymagają FFmpeg w PATH lub obok pliku programu. W razie błędu konwersji pozostaje plik WAV.");
@@ -5165,51 +5358,4 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, color: Color32) {
 }
 fn short_time(seconds: f64) -> String {
     format!("{:02}:{:02}", (seconds / 60.) as u64, seconds as u64 % 60)
-}
-
-fn console_theme(ctx: &egui::Context, light: bool) {
-    let mut v = if light {
-        egui::Visuals::light()
-    } else {
-        egui::Visuals::dark()
-    };
-    if !light {
-        v.panel_fill = Color32::from_gray(8);
-        v.window_fill = Color32::from_gray(8);
-        v.extreme_bg_color = Color32::BLACK;
-        v.faint_bg_color = Color32::BLACK;
-        v.widgets.inactive.bg_fill = Color32::BLACK;
-        v.widgets.inactive.weak_bg_fill = Color32::BLACK;
-        v.widgets.inactive.bg_stroke = Stroke::new(1_f32, Color32::BLACK);
-        v.widgets.hovered.bg_fill = Color32::BLACK;
-        v.override_text_color = Some(Color32::from_rgb(216, 226, 237));
-    }
-    v.widgets.inactive.corner_radius = egui::CornerRadius::same(1);
-    v.widgets.hovered.corner_radius = egui::CornerRadius::same(1);
-    v.widgets.active.corner_radius = egui::CornerRadius::same(1);
-    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.22 };
-    v.selection.bg_fill = if light {
-        Color32::from_rgb(27, 91, 126)
-    } else {
-        Color32::BLACK
-    };
-    if !light {
-        v.window_fill = Color32::from_gray(8);
-        v.panel_fill = Color32::from_gray(8);
-        v.extreme_bg_color = Color32::BLACK;
-        v.faint_bg_color = Color32::BLACK;
-        v.code_bg_color = Color32::BLACK;
-        for w in [
-            &mut v.widgets.noninteractive,
-            &mut v.widgets.inactive,
-            &mut v.widgets.hovered,
-            &mut v.widgets.active,
-            &mut v.widgets.open,
-        ] {
-            w.bg_fill = Color32::BLACK;
-            w.weak_bg_fill = Color32::BLACK;
-        }
-        v.selection.stroke = Stroke::new(1_f32, ACCENTS[0]);
-    }
-    ctx.set_visuals(v);
 }
