@@ -113,36 +113,22 @@ jobs:
           version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
           assets = sorted(Path('release-assets').glob('*'))
           assert len(assets) == 5, f'Expected five PRE-BETA packages, got {len(assets)}'
-          screenshots = sorted(Path('docs/screenshots').glob('prebeta-*.png'))
-          assert len(screenshots) == 4, 'Expected four current PRE-BETA screenshots'
-          Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets + screenshots))
+          import shutil
+          screenshots = sorted(Path('docs/next-update/screenshots').glob('v24-*.png'))
+          assert len(screenshots) == 6, 'Expected six current 2.4 PRE-BETA screenshots'
+          for screenshot in screenshots:
+              shutil.copy2(screenshot, Path('release-assets') / screenshot.name)
+          shutil.copy2('docs/next-update/screenshots/build-info.json', 'release-assets/v24-screenshot-build-info.json')
+          assets = sorted(Path('release-assets').glob('*'))
+          Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
+          notes = Path('docs/RELEASE-2.4.md').read_text().replace('{{TAG}}', f'rust-v{version}').replace('{{VERSION}}', version)
+          Path('release-notes.md').write_text(notes)
           with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
               file.write(f'RELEASE_TAG=rust-v{version}\nRELEASE_VERSION={version}\n')
           PY
-          cat > release-notes.md <<'NOTES'
-          **PRE-BETA — wersja testowa / pre-beta release.**
-
-          Prospekt DJ Rust 2.3 PRE-BETA — compact DJ layout, larger animated jogs, spring pitch-bend faders, larger channel/crossfader controls, eight colored hot cues, nested crates, 3,846 offline color Twemoji icons, lazy folder tree, cover strip and verified online artwork.
-          Online artwork is enabled by default. Only artist/album/title and public MusicBrainz IDs are sent to MusicBrainz / Cover Art Archive; no audio or private paths. Disable it in Settings.
-          See docs/UPDATE-2.3.md for changes, validation and limitations.
-          ![Current PRE-BETA build — two decks](https://raw.githubusercontent.com/prospektdj/prospektdj/rust-v2.3.0-prebeta.1/docs/screenshots/prebeta-main.png)
-          ![Current PRE-BETA build — four decks](https://raw.githubusercontent.com/prospektdj/prospektdj/rust-v2.3.0-prebeta.1/docs/screenshots/prebeta-four-decks.png)
-
-          Open source: AGPL-3.0-or-later. Proprietary Helvetica font is not bundled; select a licensed local file in settings.
-
-          - Windows x64: rozpakuj ZIP i uruchom prospekt-dj.exe.
-          - Linux x64: rozpakuj tar.gz i uruchom ./prospekt-dj. Kompilacja na Ubuntu 22.04; wymagany pulpit, ALSA i OpenGL.
-          - AppImage: nadaj plikowi prawa wykonywania (chmod +x *.AppImage) i uruchom go.
-          - Flatpak: flatpak install --user ./Prospekt-DJ-Rust-*.flatpak; uruchom: flatpak run org.prospektdj.ProspektDJ. Runtime pobierany jest z Flathub.
-          - Debian/Ubuntu amd64: pobierz .deb i zainstaluj: sudo apt install ./prospekt-dj_*_amd64.deb. Pakiet dodaje program do menu aplikacji.
-
-          Linux: Ubuntu 22.04+ / Debian 12+ (glibc 2.35+), wymagany pulpit. Windows: brak podpisu wydawcy. Testy automatyczne nie zastępują testów fizycznego kontrolera MIDI i interfejsu audio.
-
-          WAV i AIFF działają bez dodatkowych kodeków. Dla pozostałych formatów nagrywania zainstaluj FFmpeg. Paczki zawierają dokumentację i licencje. Sumy kontrolne: SHA256SUMS.txt.
-          NOTES
       - name: Publish release with all packages
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" release-assets/* docs/screenshots/prebeta-main.png docs/screenshots/prebeta-four-decks.png docs/screenshots/prebeta-small.png docs/screenshots/prebeta-emoji.png --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — PRE-BETA" --notes-file release-notes.md
+          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — PRE-BETA" --notes-file release-notes.md

@@ -1,3 +1,17 @@
+# Prospekt DJ 2.4 PRE-BETA — current validation
+
+- **74 local tests passed**, with `PROSPEKT_TEST_AUDIO=1`, an ALSA-null device and `PROSPEKT_TEST_FFMPEG=1`. Format checks, strict Clippy and optimized Linux Release build passed.
+- New tests cover persistent Cue zero/deletion/restart/sharing, delayed-import deletion protection, PCM identity, independent gain/fader mute, local MASTER-time history excluding PFL, exact rating filters/rescan, future database rejection, Manual Loop IN/EXIT/RE, cached waveform/user-data restart and waveform palette separation.
+- Import fixtures cover rekordbox URI Unicode, 0–255 ratings and Memory Cue exclusion; VirtualDJ BPM units/Cue numbering; Mixxx committed-WAL reads without modifying the source; Serato CSV quoting and explicit-path requirements; idempotent repeated import preserving manual fields. The URI fixture uses platform-native paths for Linux and Windows.
+- Native 2/4-deck UI was inspected at 1920×1080 and 1280×720, plus 150% DPI (1280×720 logical, 1920×1080 physical). Small four-deck mode requires vertical scrolling. Six fresh screenshots and the exact local executable/capture hashes are in [the screenshot directory](next-update/screenshots/build-info.json).
+- Physical MIDI hardware, independent physical headphone outputs, actual hardware latency, VRAM telemetry and multi-hour recording are not certified. ALSA null tests exercise CPAL but do not establish physical audio performance.
+- [Release CI](https://github.com/prospektdj/prospektdj/actions/workflows/release.yml) checks native Linux/Windows builds/tests, Debian installation, archive integrity and AppImage/Flatpak GUI startup. The publish job depends on both platform builds; attached package hashes are distinct from the local screenshot executable hash.
+- [Current implementation and importer limits](next-update/STATUS.md). Complete EU translations, broader history/source-format compatibility and database UI workflows remain unfinished.
+
+Earlier-version results below are historical, not a description of the current implementation.
+
+---
+
 # Prospekt DJ 2.3 PRE-BETA — current validation
 
 The 2.3.0-prebeta.1 reclassification changes product labels and release metadata. Its screenshots are captured from the optimized Linux executable built for this version. Core behavior is unchanged from the 59-test validation below; both platforms are checked again by release CI.

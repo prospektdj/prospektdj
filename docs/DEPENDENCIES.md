@@ -1,6 +1,6 @@
 # PRE-BETA — biblioteki i licencje
 
-Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
+Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. SQLite is bundled through rusqlite/libsqlite3-sys and includes external C code; the application logic is Rust. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
 
 | Library | Version | License | Source |
 |---|---|---|---|
@@ -87,6 +87,8 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | https://crates.io/crates/crossbeam-utils/0.8.23 |
 | crunchy | 0.2.4 | MIT | https://crates.io/crates/crunchy/0.2.4 |
 | crypto-common | 0.1.7 | MIT OR Apache-2.0 | https://crates.io/crates/crypto-common/0.1.7 |
+| csv | 1.4.0 | Unlicense/MIT | https://crates.io/crates/csv/1.4.0 |
+| csv-core | 0.1.13 | Unlicense/MIT | https://crates.io/crates/csv-core/0.1.13 |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://crates.io/crates/cursor-icon/1.2.0 |
 | dasp_sample | 0.11.0 | MIT OR Apache-2.0 | https://crates.io/crates/dasp_sample/0.11.0 |
 | data-encoding | 2.11.1 | MIT | https://crates.io/crates/data-encoding/2.11.1 |
@@ -120,6 +122,8 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | event-listener | 5.4.2 | Apache-2.0 OR MIT | https://crates.io/crates/event-listener/5.4.2 |
 | event-listener-strategy | 0.5.4 | Apache-2.0 OR MIT | https://crates.io/crates/event-listener-strategy/0.5.4 |
 | extended | 0.1.0 | MIT | https://crates.io/crates/extended/0.1.0 |
+| fallible-iterator | 0.3.0 | MIT/Apache-2.0 | https://crates.io/crates/fallible-iterator/0.3.0 |
+| fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 | https://crates.io/crates/fallible-streaming-iterator/0.1.9 |
 | fastrand | 2.5.0 | Apache-2.0 OR MIT | https://crates.io/crates/fastrand/2.5.0 |
 | fax | 0.2.7 | MIT | https://crates.io/crates/fax/0.2.7 |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | https://crates.io/crates/fdeflate/0.3.7 |
@@ -156,8 +160,10 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | gpu-descriptor | 0.3.2 | MIT OR Apache-2.0 | https://crates.io/crates/gpu-descriptor/0.3.2 |
 | gpu-descriptor-types | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/gpu-descriptor-types/0.2.0 |
 | half | 2.7.1 | MIT OR Apache-2.0 | https://crates.io/crates/half/2.7.1 |
+| hashbrown | 0.14.5 | MIT OR Apache-2.0 | https://crates.io/crates/hashbrown/0.14.5 |
 | hashbrown | 0.15.5 | MIT OR Apache-2.0 | https://crates.io/crates/hashbrown/0.15.5 |
 | hashbrown | 0.17.1 | MIT OR Apache-2.0 | https://crates.io/crates/hashbrown/0.17.1 |
+| hashlink | 0.9.1 | MIT OR Apache-2.0 | https://crates.io/crates/hashlink/0.9.1 |
 | heck | 0.5.0 | MIT OR Apache-2.0 | https://crates.io/crates/heck/0.5.0 |
 | hermit-abi | 0.5.3 | MIT OR Apache-2.0 | https://crates.io/crates/hermit-abi/0.5.3 |
 | hex | 0.4.3 | MIT OR Apache-2.0 | https://crates.io/crates/hex/0.4.3 |
@@ -201,6 +207,7 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | libc | 0.2.191 | MIT OR Apache-2.0 | https://crates.io/crates/libc/0.2.191 |
 | libloading | 0.8.9 | ISC | https://crates.io/crates/libloading/0.8.9 |
 | libredox | 0.1.25 | MIT | https://crates.io/crates/libredox/0.1.25 |
+| libsqlite3-sys | 0.30.1 | MIT | https://crates.io/crates/libsqlite3-sys/0.30.1 |
 | linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/linux-raw-sys/0.12.1 |
 | linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/linux-raw-sys/0.4.15 |
 | litemap | 0.8.3 | Unicode-3.0 | https://crates.io/crates/litemap/0.8.3 |
@@ -317,6 +324,7 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | rfd | 0.15.4 | MIT | https://crates.io/crates/rfd/0.15.4 |
 | ring | 0.17.14 | Apache-2.0 AND ISC | https://crates.io/crates/ring/0.17.14 |
 | roxmltree | 0.20.0 | MIT OR Apache-2.0 | https://crates.io/crates/roxmltree/0.20.0 |
+| rusqlite | 0.32.1 | MIT | https://crates.io/crates/rusqlite/0.32.1 |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT | https://crates.io/crates/rustc-hash/1.1.0 |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | https://crates.io/crates/rustc-hash/2.1.3 |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | https://crates.io/crates/rustc_version/0.4.1 |
@@ -419,6 +427,7 @@ Prospekt DJ 2.3 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | utf8_iter | 1.1.0 | Apache-2.0 OR MIT | https://crates.io/crates/utf8_iter/1.1.0 |
 | utf_types | 1.0.0 | Apache-2.0 OR MIT | https://crates.io/crates/utf_types/1.0.0 |
 | uuid | 1.29.2 | Apache-2.0 OR MIT | https://crates.io/crates/uuid/1.29.2 |
+| vcpkg | 0.2.15 | MIT/Apache-2.0 | https://crates.io/crates/vcpkg/0.2.15 |
 | version_check | 0.9.5 | MIT/Apache-2.0 | https://crates.io/crates/version_check/0.9.5 |
 | walkdir | 2.5.0 | Unlicense/MIT | https://crates.io/crates/walkdir/2.5.0 |
 | want | 0.3.2 | MIT | https://crates.io/crates/want/0.3.2 |

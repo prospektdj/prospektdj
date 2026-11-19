@@ -8,15 +8,17 @@ fn root(name: &str) -> std::path::PathBuf {
 fn rekordbox_xml_handles_encoded_uri_ratings_and_memory_cues() {
     let dir = root("rekordbox");
     let file = dir.join("collection.xml");
-    std::fs::write(&file,r#"<DJ_PLAYLISTS Version="1.0.0"><COLLECTION><TRACK TrackID="1" Location="file://localhost/tmp/Za%C5%BC%C3%B3%C5%82%C4%87.mp3" Name="Track" Rating="204" AverageBpm="128" DateAdded="2024-01-02" PlayCount="7"><POSITION_MARK Num="-1" Type="0" Start="1"/><POSITION_MARK Num="0" Type="0" Start="0"/><POSITION_MARK Num="7" Type="0" Start="12.345"/></TRACK></COLLECTION><PLAYLISTS><NODE Type="1" Name="Set"><TRACK Key="1"/></NODE></PLAYLISTS></DJ_PLAYLISTS>"#).unwrap();
+    let expected = dir.join("Zażółć.mp3");
+    let uri = url::Url::from_file_path(&expected)
+        .unwrap()
+        .to_string()
+        .replacen("file:///", "file://localhost/", 1);
+    std::fs::write(&file,r#"<DJ_PLAYLISTS Version="1.0.0"><COLLECTION><TRACK TrackID="1" Location="__URI__" Name="Track" Rating="204" AverageBpm="128" DateAdded="2024-01-02" PlayCount="7"><POSITION_MARK Num="-1" Type="0" Start="1"/><POSITION_MARK Num="0" Type="0" Start="0"/><POSITION_MARK Num="7" Type="0" Start="12.345"/></TRACK></COLLECTION><PLAYLISTS><NODE Type="1" Name="Set"><TRACK Key="1"/></NODE></PLAYLISTS></DJ_PLAYLISTS>"#.replace("__URI__", &uri)).unwrap();
     let r = dj_import::inspect(&file, Source::RekordboxXml).unwrap();
     assert_eq!(r.tracks[0].rating, Some(4));
     assert_eq!(r.tracks[0].hot[0], Some(0.));
     assert_eq!(r.tracks[0].hot[7], Some(12.345));
-    assert_eq!(
-        r.tracks[0].path,
-        std::path::PathBuf::from("/tmp/Zażółć.mp3")
-    );
+    assert_eq!(r.tracks[0].path, expected);
     assert_eq!(r.tracks[0].added.as_deref(), Some("2024-01-02"));
     assert_eq!(r.playlists[0].1, vec!["1"]);
     std::fs::remove_dir_all(dir).unwrap();

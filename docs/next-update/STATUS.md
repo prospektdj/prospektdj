@@ -1,6 +1,6 @@
 # Prospekt DJ 2.4 PRE-BETA — implementation in progress
 
-This is a development checkpoint, not a completed implementation of the attached 11-point specification and not a published release. The application remains Rust/egui/eframe. The 2.3 release screenshots and packages have not been replaced.
+This 2.4 PRE-BETA publishes the implemented development checkpoint, not a completed implementation of the attached 11-point specification. The application remains Rust/egui/eframe. Current README/release pages use the six genuine 2.4 screenshots; the old 2.3 screenshots remain historical assets.
 
 | Point | Implemented in this checkpoint | Still required before accepting the complete specification |
 |---|---|---|
@@ -35,7 +35,7 @@ Import writes only the Prospekt database; existing manual fields/occupied Cue sl
 
 New third-party crates use their own upstream licenses in `licenses/dependencies`. Application code remains AGPL-3.0-or-later. SQLite is a bundled external C dependency; the native application logic remains Rust.
 
-## Verified checkpoint
+## Verified development checkpoint and publication
 
 - 74 Rust tests passed with the CPAL ALSA-null test and optional FFmpeg codec tests enabled. The importer fixtures include rekordbox URI/Unicode/rating/Memory Cue, VirtualDJ tempo units, Mixxx committed-WAL consistency and source immutability, Serato CSV quoting/path requirements, and repeated-import/manual-data preservation.
 - `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`, and optimized Linux `cargo build --locked --release` passed.
@@ -44,7 +44,8 @@ New third-party crates use their own upstream licenses in `licenses/dependencies
 - Native UI interaction restored Cue slots 1/3/8 after relaunch, including exactly `0.0` seconds, and loading the same audio into A/B displayed the same bank.
 - Physical controller, independent physical headphone outputs, physical GPU VRAM telemetry, Windows compilation and hardware latency were not tested in this checkpoint. ALSA-null tests are not hardware/latency certification.
 - Initial Cue-bank hydration currently happens before stream startup; making that bootstrap fully asynchronous is still required for the specification's strict no-database-I/O-on-UI requirement.
-- No new GitHub Release was published. Source checkpoint is on the local development branch `next/2.4-prebeta`.
+- Initial checkpoint `a525fa6` was local only. The user subsequently authorized publication of this implemented state as **2.4.0-prebeta.1**, including source, updated bilingual README and five Linux/Windows packages. See the release workflow and `docs/RELEASE-2.4.md`; unfinished requirements remain explicitly listed above.
+- Screenshot build metadata retains its original capture-time publication flag and base commit. It records the genuine local build, not a claim that local and CI executables are byte-identical.
 
 ### Native screenshots
 

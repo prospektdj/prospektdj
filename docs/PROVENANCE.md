@@ -1,3 +1,13 @@
+# 2.4 PRE-BETA provenance
+
+The 2.4 mixer, SQLite user-data/analysis/history storage and source import adapters were independently implemented in Rust/egui. OpenFadeR history and XML compatibility documentation and the Mixxx schema were consulted for format/architecture reference; OpenFadeR application code was not copied. Import adapters are partial and their verified scope is documented in README.md and docs/next-update/STATUS.md.
+
+New crates include rusqlite (bundled SQLite), csv and their support crates. Their original notices are in licenses/dependencies and the inventory is updated in docs/DEPENDENCIES.md. SQLite is an external C dependency, not Rust application code. New screenshots show the actual local optimized 2.4 application with original demo audio/cover fixtures; their build provenance and hashes are retained separately from CI package hashes.
+
+Historical provenance follows.
+
+---
+
 # Pochodzenie
 
 Specyfikacją funkcjonalną był plik Prospekt_DJ_Controller.html dostarczony przez użytkownika (SHA-256: `480e15713d7f8e23c95974d62e74e31dd937246b84dd9a10d4cdd965e7ab72d8`).
