@@ -33,6 +33,7 @@ pub struct DeckView {
     pub level: f32,
     pub track: Option<Arc<Track>>,
     pub playing: bool,
+    pub reverse: bool,
     pub position: f64,
     pub rate: f64,
     pub bpm: f64,
@@ -56,6 +57,7 @@ impl Default for DeckView {
             level: 0.,
             track: None,
             playing: false,
+            reverse: false,
             position: 0.,
             rate: 1.,
             bpm: 120.,
@@ -88,6 +90,7 @@ pub struct Snapshot {
     pub recorded_seconds: f64,
     pub database_failed: bool,
     pub cue_revision: (u64, u64),
+    pub session_played: std::collections::BTreeSet<std::path::PathBuf>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -105,6 +108,7 @@ impl Default for Snapshot {
             recorded_seconds: 0.,
             database_failed: false,
             cue_revision: (0, 0),
+            session_played: Default::default(),
         }
     }
 }
@@ -114,6 +118,8 @@ pub enum DeckControl {
     FxToggle(FxSwitch),
     Fx(FxSettings),
     Load(Arc<Track>),
+    Unload,
+    Reverse(bool),
     Toggle,
     Play,
     Pause,
@@ -141,6 +147,8 @@ pub enum Command {
     Deck(usize, DeckControl),
     Cross(f32),
     Master(f32),
+    Microphone(Option<crossbeam_channel::Receiver<Frame>>),
+    MicVolume(f32),
     Phones(f32),
     SampleVolume(f32),
     SampleLoad(usize, Arc<Track>),
@@ -164,6 +172,7 @@ struct Deck {
     effects: Effects,
     view: DeckView,
     frame: f64,
+    slip_frame: Option<f64>,
     filters: [Biquad; 3],
     smooth_gain: f32,
     pre_gain: f32,
@@ -181,6 +190,7 @@ impl Deck {
             effects: Effects::new(sample_rate),
             view: DeckView::default(),
             frame: 0.,
+            slip_frame: None,
             filters: [Biquad::default(); 3],
             smooth_gain: 0.,
             pre_gain: 1.,
@@ -230,9 +240,12 @@ pub struct Engine {
     cue_banks: std::collections::HashMap<String, crate::track_store::CueBank>,
     store: Option<crate::track_store::Store>,
     history_threshold: f64,
+    microphone: Option<crossbeam_channel::Receiver<Frame>>,
+    mic_volume: f32,
     instance: u64,
     database_unavailable: bool,
     cue_revision: u64,
+    session_played: std::collections::BTreeSet<std::path::PathBuf>,
 }
 impl Engine {
     pub fn new(sample_rate: u32) -> Self {
@@ -258,9 +271,12 @@ impl Engine {
             cue_banks: Default::default(),
             store: None,
             history_threshold: 30.,
+            microphone: None,
+            mic_volume: 0.,
             instance,
             database_unavailable: false,
             cue_revision: 0,
+            session_played: Default::default(),
         }
     }
     pub fn with_store(sample_rate: u32, path: &std::path::Path) -> anyhow::Result<Self> {
@@ -334,6 +350,14 @@ impl Engine {
             Command::Deck(i, control) if i < 4 => self.deck_control(i, control),
             Command::Cross(x) => self.cross = x.clamp(0., 1.),
             Command::Master(x) => self.master = x.clamp(0., 1.),
+            Command::Microphone(input) => self.microphone = input,
+            Command::MicVolume(volume) => {
+                self.mic_volume = if volume.is_finite() {
+                    volume.clamp(0., 1.)
+                } else {
+                    0.
+                }
+            }
             Command::Phones(x) => self.phones = x.clamp(0., 1.),
             Command::SampleVolume(x) => self.sample_volume = x.clamp(0., 1.),
             Command::SampleLoad(i, track) if i < 4 => {
@@ -385,6 +409,7 @@ impl Engine {
                 self.fade = None;
             }
             Command::Restore(s) => {
+                self.session_played.extend(s.session_played.iter().cloned());
                 self.apply(Command::DeckCount(s.deck_count));
                 self.cross = s.cross;
                 self.master = s.master;
@@ -429,13 +454,72 @@ impl Engine {
     }
     fn deck_control(&mut self, i: usize, control: DeckControl) {
         let d = &mut self.decks[i];
+        if matches!(
+            &control,
+            DeckControl::Load(_)
+                | DeckControl::Unload
+                | DeckControl::Seek(_)
+                | DeckControl::Cue
+                | DeckControl::HotCue(..)
+                | DeckControl::Pad(..)
+                | DeckControl::Pause
+                | DeckControl::Toggle
+        ) {
+            if let Some(position) = d.slip_frame.take() {
+                d.frame = position;
+            }
+            d.view.reverse = false;
+        }
         let previous_hot = d.view.hot;
+        let cue_edit = matches!(&control, DeckControl::HotCue(..))
+            || (d.view.mode == PadMode::HotCue && matches!(&control, DeckControl::Pad(..)));
         match control {
             DeckControl::FxParam(param, value) => d.view.fx.set(param, value),
             DeckControl::FxToggle(switch) => d.view.fx.toggle(switch),
             DeckControl::Fx(fx) => {
                 d.view.fx = fx.sanitized();
                 d.effects.configure(d.view.fx, d.view.bpm * d.view.rate);
+            }
+            DeckControl::Reverse(held) => {
+                if held && d.view.playing && d.view.track.is_some() && d.slip_frame.is_none() {
+                    d.slip_frame = Some(d.frame);
+                    d.view.reverse = true;
+                    d.jog = None;
+                } else if !held {
+                    if let Some(position) = d.slip_frame.take() {
+                        let end = d
+                            .view
+                            .track
+                            .as_ref()
+                            .map(|t| t.frames.len() as f64)
+                            .unwrap_or(0.);
+                        d.frame = position.clamp(0., end);
+                        if d.frame >= end {
+                            d.view.playing = false;
+                        }
+                    }
+                    d.view.reverse = false;
+                }
+            }
+            DeckControl::Unload => {
+                d.view = DeckView {
+                    fx: d.view.fx,
+                    volume: d.view.volume,
+                    gain_db: d.view.gain_db,
+                    eq: d.view.eq,
+                    pfl: d.view.pfl,
+                    mode: d.view.mode,
+                    scratch: d.view.scratch,
+                    ..Default::default()
+                };
+                d.frame = 0.;
+                d.jog = None;
+                d.bend = 0.;
+                d.amp = 0.;
+                d.master_frames = 0;
+                d.counted = false;
+                d.effects.reset();
+                self.fade = None;
             }
             DeckControl::Load(track) => {
                 let hot = self.cue_banks.get(&track.id).copied().unwrap_or([None; 8]);
@@ -645,7 +729,7 @@ impl Engine {
             _ => {}
         }
         let d = &self.decks[i];
-        if previous_hot != d.view.hot {
+        if cue_edit && previous_hot != d.view.hot {
             self.cue_revision = self.cue_revision.wrapping_add(1);
             if let Some(track) = &d.view.track {
                 let id = track.id.clone();
@@ -701,6 +785,22 @@ impl Engine {
                     d.jog = None;
                 }
             }
+            if let Some(position) = &mut d.slip_frame {
+                let forward = if d.view.playing {
+                    d.view.rate * (1. + d.bend)
+                } else {
+                    0.
+                };
+                *position += forward * track.sample_rate as f64 / self.sample_rate as f64;
+                if let Some((a, b)) = d.view.loop_range {
+                    let start = a * track.sample_rate as f64;
+                    let end = b * track.sample_rate as f64;
+                    if end > start && *position >= end {
+                        *position = start + (*position - start).rem_euclid(end - start);
+                    }
+                }
+                speed = -forward.abs();
+            }
             let threshold = if track.duration() < 60. {
                 self.history_threshold.min(track.duration() * 0.5)
             } else {
@@ -716,6 +816,9 @@ impl Engine {
                 d.master_frames = d.master_frames.saturating_add(1);
                 if !d.counted && d.master_frames as f64 / self.sample_rate as f64 >= threshold {
                     d.counted = true;
+                    if let Some(path) = &track.path {
+                        self.session_played.insert(path.clone());
+                    }
                     if let Some(store) = &self.store {
                         store.play(
                             format!(
@@ -731,7 +834,10 @@ impl Engine {
                     }
                 }
             }
-            let active = speed != 0. && d.frame >= 0. && d.frame < track.frames.len() as f64;
+            let active = speed != 0.
+                && d.frame >= 0.
+                && d.frame < track.frames.len() as f64
+                && !(d.view.reverse && d.frame <= 0.);
             d.amp += (if active { 1. } else { 0. } - d.amp) * 0.04;
             let mut frame = track.sample(d.frame);
             d.smooth_pre_gain += (d.pre_gain - d.smooth_pre_gain) * 0.002;
@@ -752,6 +858,15 @@ impl Engine {
                 }
             }
             d.frame += speed * track.sample_rate as f64 / self.sample_rate as f64;
+            if d.view.reverse {
+                if let Some((a, b)) = d.view.loop_range {
+                    let start = a * track.sample_rate as f64;
+                    let end = b * track.sample_rate as f64;
+                    if end > start && d.frame < start {
+                        d.frame = start + (d.frame - start).rem_euclid(end - start);
+                    }
+                }
+            }
             if d.jog.is_none() {
                 if let Some((a, b)) = d.view.loop_range {
                     let start = a * track.sample_rate as f64;
@@ -763,7 +878,7 @@ impl Engine {
             }
             if d.frame >= track.frames.len() as f64 || d.frame < 0. {
                 d.frame = d.frame.clamp(0., track.frames.len() as f64);
-                if d.jog.is_none() {
+                if d.jog.is_none() && !d.view.reverse {
                     d.view.playing = false;
                 }
             }
@@ -778,6 +893,15 @@ impl Engine {
                 v.frame += v.sample.track.sample_rate as f64 / self.sample_rate as f64;
                 if v.frame >= v.sample.end {
                     *voice = None;
+                }
+            }
+        }
+        if let Some(input) = &self.microphone {
+            if let Ok(frame) = input.try_recv() {
+                for (sample, mic) in out.iter_mut().zip(frame) {
+                    if mic.is_finite() {
+                        *sample += mic.clamp(-1., 1.) * self.mic_volume;
+                    }
                 }
             }
         }
@@ -845,6 +969,7 @@ impl Engine {
             recording: self.capture.is_some(),
             recorded_seconds: self.recorded as f64 / self.sample_rate as f64,
             cue_revision: (self.instance, self.cue_revision),
+            session_played: self.session_played.clone(),
             database_failed: self.database_unavailable
                 || self.store.as_ref().is_some_and(|s| s.failed()),
         }

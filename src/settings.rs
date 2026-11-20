@@ -13,12 +13,17 @@ pub struct Settings {
     pub show_effects: bool,
     pub wave_style: crate::wave_style::WaveStyle,
     pub reduced_motion: bool,
+    pub blink_paused_play: bool,
+    pub show_emojis: bool,
     pub ui_scale: f32,
     pub refresh_hz: u32,
     pub show_statistics: bool,
     pub cover_strip: bool,
+    pub banger_site_name: bool,
+    pub cover_scroll_animation: bool,
     pub track_preview: bool,
     pub preview_column: bool,
+    pub live_recommendations: bool,
     pub history_threshold: f64,
     pub import_prompt_seen: bool,
     pub auto_cover_download: bool,
@@ -28,6 +33,7 @@ pub struct Settings {
     pub library_scope: crate::library::Scope,
     pub dock_tab: usize,
     pub light: bool,
+    pub white_jog: bool,
     pub deck_count: usize,
     pub language: String,
     pub logo_font: Option<PathBuf>,
@@ -36,6 +42,9 @@ pub struct Settings {
     pub controller_profile: Option<usize>,
     pub controller_profile_source: String,
     pub master_device: String,
+    pub mic_enabled: bool,
+    pub mic_device: String,
+    pub mic_volume: f32,
     pub cue_device: String,
     pub latency_ms: u32,
     pub audio_backend: crate::audio::Backend,
@@ -64,12 +73,17 @@ impl Default for Settings {
             show_effects: false,
             wave_style: Default::default(),
             reduced_motion: false,
+            blink_paused_play: true,
+            show_emojis: true,
             ui_scale: 1.,
             refresh_hz: 30,
             show_statistics: true,
             cover_strip: true,
+            banger_site_name: true,
+            cover_scroll_animation: true,
             track_preview: true,
             preview_column: true,
+            live_recommendations: true,
             history_threshold: 30.,
             import_prompt_seen: false,
             auto_cover_download: true,
@@ -77,8 +91,9 @@ impl Default for Settings {
             tree_width: 210.,
             tree_open: BTreeSet::new(),
             library_scope: crate::library::Scope::All,
-            dock_tab: 2,
+            dock_tab: 0,
             light: false,
+            white_jog: false,
             deck_count: 2,
             language: "pl".into(),
             logo_font: None,
@@ -87,6 +102,9 @@ impl Default for Settings {
             controller_profile: None,
             controller_profile_source: String::new(),
             master_device: String::new(),
+            mic_enabled: false,
+            mic_device: String::new(),
+            mic_volume: 0.7,
             cue_device: String::new(),
             latency_ms: 12,
             audio_backend: Default::default(),
@@ -131,13 +149,18 @@ pub fn load() -> Settings {
         s.master_device.clear();
     }
 
+    s.mic_volume = if s.mic_volume.is_finite() {
+        s.mic_volume.clamp(0., 1.)
+    } else {
+        0.
+    };
     s.width = s.width.clamp(1000., 3840.);
     s.height = s.height.clamp(720., 2160.);
-    s.dock_tab = s.dock_tab.min(2);
-    if s.dock_tab == 1 {
-        s.dock_tab = 2;
+    // Retire the old Samples/Mixer tabs without reopening a different panel.
+    if s.dock_tab != 0 {
         s.show_effects = false;
     }
+    s.dock_tab = 0;
     s.deck_count = if s.deck_count == 4 { 4 } else { 2 };
     s.effects.resize(4, crate::effects::FxSettings::default());
     s.effects.truncate(4);

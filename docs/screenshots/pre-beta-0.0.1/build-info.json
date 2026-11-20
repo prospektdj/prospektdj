@@ -1,0 +1,47 @@
+{
+  "version": "0.0.1-prebeta",
+  "display_name": "Prospekt DJ — pre-beta 0.0.1",
+  "build": "optimized Linux x86_64 Release",
+  "binary_sha256": "67aa1187a09799e40e14bc04772b24c4af83a9200ece705ba67fa2b52330ecc7",
+  "source_tree_sha256": "b379e3c99789592fe86ad5c260e32c4cf2e2eb758f030967b0f42554a93988bc",
+  "source_tree_scope": "Cargo.toml, Cargo.lock, build.rs, src/, assets/, licenses/: sorted path + NUL + content + NUL",
+  "base_commit": "4fe56d2d6d769cf4c95a16e26184acdd1948892d",
+  "local_tests_passed": 102,
+  "capture_method": "native egui application, Xvfb :100, ImageMagick import; unedited screenshots",
+  "fixture_note": "Original synthetic demo audio and cover illustrations; ALSA null is not physical audio verification. Microsoft-font substitutes may be used on Linux.",
+  "ci_binary_note": "Release CI builds downloadable executables separately; use SHA256SUMS.txt for their package hashes.",
+  "screenshots": {
+    "four-decks.png": {
+      "sha256": "c038bfb466aeef6e806f2795455b59f163c3cf48a72c55a42608add627081a95",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "captured_utc": "2026-11-20T00:17:03.988392+00:00"
+    },
+    "main-dark.png": {
+      "sha256": "a56951f2295cdb8d96064e57d1733f990b6ed6ca37d08f5f635a34d9c143c9f4",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "captured_utc": "2026-11-20T00:16:13.987690+00:00"
+    },
+    "main-white.png": {
+      "sha256": "d5b4711f4e31062ce396c8fc25c2443c2edeccae970da7cdb2469d9223a8042f",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "captured_utc": "2026-11-20T00:16:34.887987+00:00"
+    },
+    "settings.png": {
+      "sha256": "ff5ac0211b9cb1df408f9728adccfb65362a308621ac6083024e0690c7d0e292",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "captured_utc": "2026-11-20T00:16:36.616012+00:00"
+    }
+  }
+}

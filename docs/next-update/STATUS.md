@@ -1,3 +1,9 @@
+# Current release: pre-beta 0.0.1
+
+The latest implementation, controls, Windows ASIO, microphone, MIDI discovery and UI additions are documented in [README](../../README.md) and [current release notes](../RELEASE-0.0.1.md). The checklist below is retained as the historical eleven-point checkpoint; it does not override the current feature descriptions.
+
+---
+
 # Prospekt DJ 2.4 PRE-BETA — implementation in progress
 
 This 2.4 PRE-BETA publishes the implemented development checkpoint, not a completed implementation of the attached 11-point specification. The application remains Rust/egui/eframe. Current README/release pages use the six genuine 2.4 screenshots; the old 2.3 screenshots remain historical assets.

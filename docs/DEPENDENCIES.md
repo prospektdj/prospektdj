@@ -1,6 +1,6 @@
-# PRE-BETA — biblioteki i licencje
+# PRE-BETA — libraries and licenses
 
-Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional platform/build dependencies from Cargo.lock; not all are enabled in every binary. License texts are in licenses/dependencies. Font notices are in licenses/fonts; mapping notices are in licenses/controller-mappings. SQLite is bundled through rusqlite/libsqlite3-sys and includes external C code; the application logic is Rust. FFmpeg remains an optional external program, not bundled. HTTP uses rustls with bundled WebPKI trust roots. Twemoji 16.0.1 graphics are separately licensed CC BY 4.0; attribution and notices are in licenses/twemoji. Some published optional platform crates omit a standalone license file; their declared license and upstream source are recorded in SOURCE.md.
+Prospekt DJ pre-beta 0.0.1 application code is AGPL-3.0-or-later. The inventory covers Cargo.lock, including optional/platform/build dependencies. Notices are in licenses/dependencies. SQLite includes external C code. Windows ASIO support uses Steinberg ASIO SDK 2.3.4 under its GPLv3 option; license selection and corresponding-source details are in licenses/asio-sdk. No hardware driver installer or ASIO logo is bundled. FFmpeg remains an optional external program. Graphics/fonts/controller mappings retain their separate notices.
 
 | Library | Version | License | Source |
 |---|---|---|---|
@@ -9,9 +9,10 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | https://crates.io/crates/adler2/2.0.1 |
 | ahash | 0.8.12 | MIT OR Apache-2.0 | https://crates.io/crates/ahash/0.8.12 |
 | aho-corasick | 1.1.5 | Unlicense OR MIT | https://crates.io/crates/aho-corasick/1.1.5 |
-| alsa | 0.9.1 | Apache-2.0/MIT | https://crates.io/crates/alsa/0.9.1 |
-| alsa-sys | 0.3.1 | MIT | https://crates.io/crates/alsa-sys/0.3.1 |
+| alsa | 0.11.0 | Apache-2.0/MIT | https://crates.io/crates/alsa/0.11.0 |
+| alsa-sys | 0.4.0 | MIT | https://crates.io/crates/alsa-sys/0.4.0 |
 | android-activity | 0.6.1 | MIT OR Apache-2.0 | https://crates.io/crates/android-activity/0.6.1 |
+| android-build | 0.1.4 | See upstream and Cargo.lock | https://crates.io/crates/android-build/0.1.4 |
 | android-properties | 0.2.2 | MIT | https://crates.io/crates/android-properties/0.2.2 |
 | android_system_properties | 0.1.6 | MIT OR Apache-2.0 | https://crates.io/crates/android_system_properties/0.1.6 |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 | https://crates.io/crates/anyhow/1.0.104 |
@@ -21,6 +22,7 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | as-raw-xcb-connection | 1.0.1 | MIT OR Apache-2.0 | https://crates.io/crates/as-raw-xcb-connection/1.0.1 |
 | ash | 0.38.0+1.3.281 | MIT OR Apache-2.0 | https://crates.io/crates/ash/0.38.0+1.3.281 |
 | ashpd | 0.11.1 | MIT | https://crates.io/crates/ashpd/0.11.1 |
+| asio-sys | 0.2.6 | Apache-2.0 | https://crates.io/crates/asio-sys/0.2.6 |
 | async-broadcast | 0.7.2 | MIT OR Apache-2.0 | https://crates.io/crates/async-broadcast/0.7.2 |
 | async-channel | 2.5.0 | Apache-2.0 OR MIT | https://crates.io/crates/async-channel/2.5.0 |
 | async-executor | 1.14.1 | Apache-2.0 OR MIT | https://crates.io/crates/async-executor/1.14.1 |
@@ -75,11 +77,10 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | core-graphics | 0.23.2 | MIT OR Apache-2.0 | https://crates.io/crates/core-graphics/0.23.2 |
 | core-graphics-types | 0.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/core-graphics-types/0.1.3 |
 | core_detect | 1.0.0 | MIT/Apache-2.0 | https://crates.io/crates/core_detect/1.0.0 |
-| coreaudio-rs | 0.11.3 | MIT/Apache-2.0 | https://crates.io/crates/coreaudio-rs/0.11.3 |
-| coreaudio-sys | 0.2.18 | MIT | https://crates.io/crates/coreaudio-sys/0.2.18 |
+| coreaudio-rs | 0.14.2 | See upstream and Cargo.lock | https://crates.io/crates/coreaudio-rs/0.14.2 |
 | coremidi | 0.9.2 | MIT | https://crates.io/crates/coremidi/0.9.2 |
 | coremidi-sys | 3.2.1 | MIT | https://crates.io/crates/coremidi-sys/3.2.1 |
-| cpal | 0.15.3 | Apache-2.0 | https://crates.io/crates/cpal/0.15.3 |
+| cpal | 0.17.3 | Apache-2.0 | https://crates.io/crates/cpal/0.17.3 |
 | cpufeatures | 0.2.17 | MIT OR Apache-2.0 | https://crates.io/crates/cpufeatures/0.2.17 |
 | cpufeatures | 0.3.1 | MIT OR Apache-2.0 | https://crates.io/crates/cpufeatures/0.3.1 |
 | crc32fast | 1.5.5 | MIT OR Apache-2.0 | https://crates.io/crates/crc32fast/1.5.5 |
@@ -99,6 +100,7 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | dispatch2 | 0.3.1 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/dispatch2/0.3.1 |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 | https://crates.io/crates/displaydoc/0.2.7 |
 | dlib | 0.5.3 | MIT | https://crates.io/crates/dlib/0.5.3 |
+| dlopen2 | 0.9.0 | See upstream and Cargo.lock | https://crates.io/crates/dlopen2/0.9.0 |
 | document-features | 0.2.12 | MIT OR Apache-2.0 | https://crates.io/crates/document-features/0.2.12 |
 | downcast-rs | 1.2.1 | MIT/Apache-2.0 | https://crates.io/crates/downcast-rs/1.2.1 |
 | dpi | 0.1.2 | Apache-2.0 AND MIT | https://crates.io/crates/dpi/0.1.2 |
@@ -193,9 +195,11 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | ipnet | 2.12.2 | MIT OR Apache-2.0 | https://crates.io/crates/ipnet/2.12.2 |
 | itertools | 0.13.0 | MIT OR Apache-2.0 | https://crates.io/crates/itertools/0.13.0 |
 | itoa | 1.0.19 | MIT OR Apache-2.0 | https://crates.io/crates/itoa/1.0.19 |
+| java-locator | 0.1.9 | See upstream and Cargo.lock | https://crates.io/crates/java-locator/0.1.9 |
 | jni | 0.21.1 | MIT/Apache-2.0 | https://crates.io/crates/jni/0.21.1 |
 | jni | 0.22.4 | MIT OR Apache-2.0 | https://crates.io/crates/jni/0.22.4 |
 | jni-macros | 0.22.4 | MIT OR Apache-2.0 | https://crates.io/crates/jni-macros/0.22.4 |
+| jni-min-helper | 0.3.4 | See upstream and Cargo.lock | https://crates.io/crates/jni-min-helper/0.3.4 |
 | jni-sys | 0.3.1 | MIT OR Apache-2.0 | https://crates.io/crates/jni-sys/0.3.1 |
 | jni-sys | 0.4.1 | MIT OR Apache-2.0 | https://crates.io/crates/jni-sys/0.4.1 |
 | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 | https://crates.io/crates/jni-sys-macros/0.4.1 |
@@ -205,6 +209,7 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | khronos_api | 3.1.0 | Apache-2.0 | https://crates.io/crates/khronos_api/3.1.0 |
 | lazy_static | 1.5.1 | MIT OR Apache-2.0 | https://crates.io/crates/lazy_static/1.5.1 |
 | libc | 0.2.191 | MIT OR Apache-2.0 | https://crates.io/crates/libc/0.2.191 |
+| libloading | 0.7.4 | See upstream and Cargo.lock | https://crates.io/crates/libloading/0.7.4 |
 | libloading | 0.8.9 | ISC | https://crates.io/crates/libloading/0.8.9 |
 | libredox | 0.1.25 | MIT | https://crates.io/crates/libredox/0.1.25 |
 | libsqlite3-sys | 0.30.1 | MIT | https://crates.io/crates/libsqlite3-sys/0.30.1 |
@@ -217,13 +222,13 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | lofty_attr | 0.11.1 | MIT OR Apache-2.0 | https://crates.io/crates/lofty_attr/0.11.1 |
 | log | 0.4.35 | MIT OR Apache-2.0 | https://crates.io/crates/log/0.4.35 |
 | lru-slab | 0.1.3 | MIT OR Apache-2.0 OR Zlib | https://crates.io/crates/lru-slab/0.1.3 |
-| mach2 | 0.4.3 | BSD-2-Clause OR MIT OR Apache-2.0 | https://crates.io/crates/mach2/0.4.3 |
+| mach2 | 0.5.0 | See upstream and Cargo.lock | https://crates.io/crates/mach2/0.5.0 |
 | malloc_buf | 0.0.6 | MIT | https://crates.io/crates/malloc_buf/0.0.6 |
 | memchr | 2.8.3 | Unlicense OR MIT | https://crates.io/crates/memchr/2.8.3 |
 | memmap2 | 0.9.12 | MIT OR Apache-2.0 | https://crates.io/crates/memmap2/0.9.12 |
 | memoffset | 0.9.1 | MIT | https://crates.io/crates/memoffset/0.9.1 |
 | metal | 0.31.0 | MIT OR Apache-2.0 | https://crates.io/crates/metal/0.31.0 |
-| midir | 0.10.4 | MIT | https://crates.io/crates/midir/0.10.4 |
+| midir | 0.11.1 | MIT | https://crates.io/crates/midir/0.11.1 |
 | minimal-lexical | 0.2.1 | MIT/Apache-2.0 | https://crates.io/crates/minimal-lexical/0.2.1 |
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | https://crates.io/crates/miniz_oxide/0.8.9 |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | https://crates.io/crates/miniz_oxide/0.9.1 |
@@ -231,7 +236,6 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://crates.io/crates/moxcms/0.8.1 |
 | multiversion_no_op | 1.0.0 | Apache-2.0 OR MIT | https://crates.io/crates/multiversion_no_op/1.0.0 |
 | naga | 24.0.0 | MIT OR Apache-2.0 | https://crates.io/crates/naga/24.0.0 |
-| ndk | 0.8.0 | MIT OR Apache-2.0 | https://crates.io/crates/ndk/0.8.0 |
 | ndk | 0.9.0 | MIT OR Apache-2.0 | https://crates.io/crates/ndk/0.9.0 |
 | ndk-context | 0.1.1 | MIT OR Apache-2.0 | https://crates.io/crates/ndk-context/0.1.1 |
 | ndk-sys | 0.5.0+25.2.9519653 | MIT OR Apache-2.0 | https://crates.io/crates/ndk-sys/0.5.0+25.2.9519653 |
@@ -249,8 +253,12 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | objc2 | 0.6.5 | MIT | https://crates.io/crates/objc2/0.6.5 |
 | objc2-app-kit | 0.2.2 | MIT | https://crates.io/crates/objc2-app-kit/0.2.2 |
 | objc2-app-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/objc2-app-kit/0.3.2 |
+| objc2-audio-toolbox | 0.3.2 | See upstream and Cargo.lock | https://crates.io/crates/objc2-audio-toolbox/0.3.2 |
+| objc2-avf-audio | 0.3.2 | See upstream and Cargo.lock | https://crates.io/crates/objc2-avf-audio/0.3.2 |
 | objc2-cloud-kit | 0.2.2 | MIT | https://crates.io/crates/objc2-cloud-kit/0.2.2 |
 | objc2-contacts | 0.2.2 | MIT | https://crates.io/crates/objc2-contacts/0.2.2 |
+| objc2-core-audio | 0.3.2 | See upstream and Cargo.lock | https://crates.io/crates/objc2-core-audio/0.3.2 |
+| objc2-core-audio-types | 0.3.2 | See upstream and Cargo.lock | https://crates.io/crates/objc2-core-audio-types/0.3.2 |
 | objc2-core-data | 0.2.2 | MIT | https://crates.io/crates/objc2-core-data/0.2.2 |
 | objc2-core-foundation | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/objc2-core-foundation/0.3.2 |
 | objc2-core-graphics | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://crates.io/crates/objc2-core-graphics/0.3.2 |
@@ -268,8 +276,6 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | objc2-ui-kit | 0.2.2 | MIT | https://crates.io/crates/objc2-ui-kit/0.2.2 |
 | objc2-uniform-type-identifiers | 0.2.2 | MIT | https://crates.io/crates/objc2-uniform-type-identifiers/0.2.2 |
 | objc2-user-notifications | 0.2.2 | MIT | https://crates.io/crates/objc2-user-notifications/0.2.2 |
-| oboe | 0.6.1 | Apache-2.0 | https://crates.io/crates/oboe/0.6.1 |
-| oboe-sys | 0.6.1 | Apache-2.0 | https://crates.io/crates/oboe-sys/0.6.1 |
 | ogg_pager | 0.7.2 | MIT OR Apache-2.0 | https://crates.io/crates/ogg_pager/0.7.2 |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 | https://crates.io/crates/once_cell/1.21.4 |
 | option-ext | 0.2.0 | MPL-2.0 | https://crates.io/crates/option-ext/0.2.0 |
@@ -280,6 +286,7 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | parking | 2.2.1 | Apache-2.0 OR MIT | https://crates.io/crates/parking/2.2.1 |
 | parking_lot | 0.12.5 | MIT OR Apache-2.0 | https://crates.io/crates/parking_lot/0.12.5 |
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | https://crates.io/crates/parking_lot_core/0.9.12 |
+| parse_cfg | 4.1.1 | CC0-1.0 OR MIT | https://crates.io/crates/parse_cfg/4.1.1 |
 | paste | 1.0.15 | MIT OR Apache-2.0 | https://crates.io/crates/paste/1.0.15 |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | https://crates.io/crates/percent-encoding/2.3.2 |
 | pin-project | 1.1.13 | Apache-2.0 OR MIT | https://crates.io/crates/pin-project/1.1.13 |
@@ -293,8 +300,10 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | pollster | 0.4.0 | Apache-2.0/MIT | https://crates.io/crates/pollster/0.4.0 |
 | potential_utf | 0.1.6 | Unicode-3.0 | https://crates.io/crates/potential_utf/0.1.6 |
 | ppv-lite86 | 0.2.21 | MIT OR Apache-2.0 | https://crates.io/crates/ppv-lite86/0.2.21 |
+| prettyplease | 0.2.37 | MIT OR Apache-2.0 | https://crates.io/crates/prettyplease/0.2.37 |
 | proc-macro-crate | 3.5.0 | MIT OR Apache-2.0 | https://crates.io/crates/proc-macro-crate/3.5.0 |
 | proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | https://crates.io/crates/proc-macro2/1.0.107 |
+| process_path | 0.1.4 | See upstream and Cargo.lock | https://crates.io/crates/process_path/0.1.4 |
 | profiling | 1.0.18 | MIT OR Apache-2.0 | https://crates.io/crates/profiling/1.0.18 |
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | https://crates.io/crates/pxfm/0.1.30 |
 | quick-error | 2.0.1 | MIT/Apache-2.0 | https://crates.io/crates/quick-error/2.0.1 |
@@ -461,26 +470,19 @@ Prospekt DJ 2.4 PRE-BETA is AGPL-3.0-or-later. The inventory includes optional p
 | winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | https://crates.io/crates/winapi-i686-pc-windows-gnu/0.4.0 |
 | winapi-util | 0.1.11 | Unlicense OR MIT | https://crates.io/crates/winapi-util/0.1.11 |
 | winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | https://crates.io/crates/winapi-x86_64-pc-windows-gnu/0.4.0 |
-| windows | 0.54.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.54.0 |
-| windows | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.56.0 |
 | windows | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.58.0 |
 | windows | 0.61.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows/0.61.3 |
 | windows-collections | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-collections/0.2.0 |
-| windows-core | 0.54.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.54.0 |
-| windows-core | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.56.0 |
 | windows-core | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.58.0 |
 | windows-core | 0.61.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-core/0.61.2 |
 | windows-future | 0.2.1 | MIT OR Apache-2.0 | https://crates.io/crates/windows-future/0.2.1 |
-| windows-implement | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.56.0 |
 | windows-implement | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.58.0 |
 | windows-implement | 0.60.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-implement/0.60.2 |
-| windows-interface | 0.56.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.56.0 |
 | windows-interface | 0.58.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.58.0 |
 | windows-interface | 0.59.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows-interface/0.59.3 |
 | windows-link | 0.1.3 | MIT OR Apache-2.0 | https://crates.io/crates/windows-link/0.1.3 |
 | windows-link | 0.2.1 | MIT OR Apache-2.0 | https://crates.io/crates/windows-link/0.2.1 |
 | windows-numerics | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-numerics/0.2.0 |
-| windows-result | 0.1.2 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.1.2 |
 | windows-result | 0.2.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.2.0 |
 | windows-result | 0.3.4 | MIT OR Apache-2.0 | https://crates.io/crates/windows-result/0.3.4 |
 | windows-strings | 0.1.0 | MIT OR Apache-2.0 | https://crates.io/crates/windows-strings/0.1.0 |

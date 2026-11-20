@@ -32,3 +32,7 @@ pub mod library_data;
 pub mod dj_import;
 
 pub mod theme;
+
+pub mod recommendations;
+
+pub mod microphone;

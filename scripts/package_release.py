@@ -14,7 +14,7 @@ parser.add_argument('--target', required=True)
 parser.add_argument('--platform', choices=['linux-x64', 'windows-x64', 'macos-arm64', 'macos-x64'], required=True)
 args = parser.parse_args()
 version = tomllib.loads((root / 'Cargo.toml').read_text())['package']['version']
-name = f'Prospekt-DJ-Rust-{version}-{args.platform}'
+name = f'Prospekt-DJ-{version}-{args.platform}'
 out = root / 'release-dist'
 out.mkdir(exist_ok=True)
 stage = out / name

@@ -90,6 +90,35 @@ pub fn connect(index: usize, tx: Sender<Vec<u8>>) -> Result<Connection> {
         _connection: connection,
     })
 }
+/// Resolve the current port by name so hot-plug reordering cannot change the target.
+pub fn connect_named(name: &str, tx: Sender<Vec<u8>>) -> Result<Connection> {
+    let mut input = MidiInput::new("Prospekt DJ")?;
+    input.ignore(Ignore::SysexAndTime);
+    let ports = input.ports();
+    let mut matching = ports
+        .iter()
+        .filter(|port| input.port_name(port).ok().as_deref() == Some(name));
+    let port = matching
+        .next()
+        .context("Urządzenie MIDI zostało odłączone")?;
+    anyhow::ensure!(
+        matching.next().is_none(),
+        "Kilka portów ma tę samą nazwę. Wybierz wejście ręcznie w ustawieniach MIDI."
+    );
+    let connection = input
+        .connect(
+            port,
+            "prospekt-controller",
+            move |_, bytes, _| {
+                let _ = tx.try_send(bytes.to_vec());
+            },
+            (),
+        )
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    Ok(Connection {
+        _connection: connection,
+    })
+}
 pub fn validate(maps: &[Mapping], actions: &[String]) -> Result<()> {
     if maps.len() > 1024 {
         bail!("Mapa zawiera ponad 1024 przypisań");
@@ -325,4 +354,44 @@ impl Mapping {
             }
         }
     }
+}
+
+/// Match concrete port/model identifiers, never a manufacturer alone.
+/// Keep ambiguous profile variants for explicit selection.
+pub fn matching_profiles(port: &str, profiles: &[ControllerProfile]) -> Vec<usize> {
+    let compact = |s: &str| {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    let port = compact(port);
+    let mut matches = Vec::new();
+    for (index, profile) in profiles.iter().enumerate() {
+        if profile.mappings.is_empty() {
+            continue;
+        }
+        let model = compact(&profile.model);
+        if model.len() < 4 || !model.chars().any(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        let Some(position) = port.find(&model) else {
+            continue;
+        };
+        let suffix = &port[position + model.len()..];
+        if !suffix.is_empty()
+            && !["midi", "usb", "port", "controller"]
+                .iter()
+                .any(|prefix| suffix.starts_with(prefix))
+        {
+            continue;
+        }
+        matches.push((index, model.len()));
+    }
+    let longest = matches.iter().map(|(_, len)| *len).max().unwrap_or(0);
+    matches
+        .into_iter()
+        .filter(|(_, len)| *len == longest)
+        .map(|(i, _)| i)
+        .collect()
 }

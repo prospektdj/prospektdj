@@ -43,7 +43,7 @@ PY
 # Acknowledge the AppImage runtime's license in the distribution.
 curl --fail --location --retry 3 https://raw.githubusercontent.com/AppImage/type2-runtime/main/LICENSE --output "$appdir/usr/share/doc/prospekt-dj/AppImage-runtime-LICENSE"
 export LINUXDEPLOY_OUTPUT_VERSION="$version"
-export OUTPUT="$PWD/release-dist/Prospekt-DJ-Rust-${version}-linux-x64.AppImage"
+export OUTPUT="$PWD/release-dist/Prospekt-DJ-${version}-linux-x64.AppImage"
 export LDAI_OUTPUT="$OUTPUT"
 release-tools/linuxdeploy.AppImage --appdir "$appdir" --output appimage
 chmod +x "$OUTPUT"

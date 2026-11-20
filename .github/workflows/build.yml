@@ -1,8 +1,8 @@
-name: Rust Windows and Linux
+name: Windows and Linux
 on:
   workflow_dispatch:
   push:
-    tags: ['rust-v*']
+    tags: ['v*']
 permissions:
   contents: read
 jobs:

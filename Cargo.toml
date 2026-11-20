@@ -1,6 +1,6 @@
 [package]
 name = "prospekt-dj"
-version = "2.4.1-prebeta.1"
+version = "0.0.1-prebeta"
 edition = "2021"
 rust-version = "1.89"
 description = "PRE-BETA open source DJ studio for Windows and Linux"

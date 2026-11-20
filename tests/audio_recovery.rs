@@ -213,3 +213,53 @@ fn reopening_output_does_not_restore_stale_snapshot_over_newer_saved_cues() {
     drop(engine);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn unavailable_asio_pfl_pair_preserves_valid_master_without_duplicating_outputs() {
+    let (routing, warning) = audio::resolve_routing(
+        Routing {
+            master: 0,
+            cue: Some(2),
+        },
+        2,
+    )
+    .unwrap();
+    assert_eq!(routing, Routing::default());
+    assert!(warning.unwrap().contains("PFL disabled"));
+    assert!(audio::resolve_routing(
+        Routing {
+            master: 2,
+            cue: None
+        },
+        2
+    )
+    .is_err());
+    let (routing, warning) = audio::resolve_routing(
+        Routing {
+            master: 0,
+            cue: Some(2),
+        },
+        4,
+    )
+    .unwrap();
+    assert_eq!(routing.cue, Some(2));
+    assert!(warning.is_none());
+}
+#[test]
+fn emoji_comment_insertion_replaces_selection_with_unicode_caret_positions() {
+    use prospekt_dj::music_view::insert_unicode;
+    let mut comment = "Zażółć A\nB".to_owned();
+    let cursor = insert_unicode(&mut comment, 7..8, "👩‍💻");
+    assert_eq!(comment, "Zażółć 👩‍💻\nB");
+    assert_eq!(cursor, 10);
+    let cursor = insert_unicode(&mut comment, cursor..cursor, "❤️");
+    assert_eq!(comment, "Zażółć 👩‍💻❤️\nB");
+    assert_eq!(cursor, 12);
+    let user = prospekt_dj::library_data::UserData {
+        comment: comment.clone(),
+        ..Default::default()
+    };
+    let saved = serde_json::to_string(&user).unwrap();
+    let restored: prospekt_dj::library_data::UserData = serde_json::from_str(&saved).unwrap();
+    assert_eq!(restored.comment, comment);
+}

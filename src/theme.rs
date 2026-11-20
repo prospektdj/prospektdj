@@ -8,6 +8,11 @@ pub fn apply(ctx: &egui::Context, light: bool) {
     } else {
         egui::ThemePreference::Dark
     });
+    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(if light {
+        egui::viewport::SystemTheme::Light
+    } else {
+        egui::viewport::SystemTheme::Dark
+    }));
     let mut v = if light {
         egui::Visuals::light()
     } else {
@@ -24,9 +29,15 @@ pub fn apply(ctx: &egui::Context, light: bool) {
         v.widgets.hovered.bg_fill = Color32::BLACK;
         v.override_text_color = Some(Color32::from_rgb(216, 226, 237));
     }
-    v.widgets.inactive.corner_radius = egui::CornerRadius::same(1);
-    v.widgets.hovered.corner_radius = egui::CornerRadius::same(1);
-    v.widgets.active.corner_radius = egui::CornerRadius::same(1);
+    for widget in [
+        &mut v.widgets.noninteractive,
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
+        widget.corner_radius = egui::CornerRadius::ZERO;
+    }
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.22 };
     v.selection.bg_fill = if light {
         Color32::from_rgb(27, 91, 126)

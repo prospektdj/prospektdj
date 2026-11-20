@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
 #[derive(Default)]
 pub struct EmojiAtlas {
+    pub hidden: bool,
     textures: HashMap<String, (TextureHandle, u64)>,
     tick: u64,
 }
@@ -39,12 +40,53 @@ impl EmojiAtlas {
         Some(texture)
     }
     pub fn button(&mut self, ui: &mut egui::Ui, text: &str) -> egui::Response {
-        let response = if let Some(texture) = self.texture(ui.ctx(), text) {
+        let response = if self.hidden {
+            ui.add_enabled(false, egui::Button::new("—"))
+        } else if let Some(texture) = self.texture(ui.ctx(), text) {
             ui.add(egui::ImageButton::new((texture.id(), Vec2::splat(23.))))
         } else {
             ui.button(text)
         };
         response.on_hover_text(text)
+    }
+    /// Bounded, wrapped color preview; keep grapheme/ZWJ sequences intact.
+    pub fn preview(&mut self, ui: &mut egui::Ui, text: &str, width: f32, max_rows: usize) {
+        if text.is_empty() {
+            return;
+        }
+        let color = ui.visuals().text_color();
+        let mut line = String::new();
+        let mut used = 0_f32;
+        let mut rows = 0;
+        for grapheme in text.graphemes(true).take(512) {
+            let size = if prospekt_dj::music_view::emoji_png(grapheme).is_some() {
+                18.
+            } else {
+                ui.painter()
+                    .layout_no_wrap(grapheme.to_owned(), FontId::proportional(11.), color)
+                    .size()
+                    .x
+            };
+            if grapheme == "\n" || (!line.is_empty() && used + size > width - 6.) {
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 22.), egui::Sense::hover());
+                self.paint(ui, rect, &line, color);
+                rows += 1;
+                if rows >= max_rows {
+                    return;
+                }
+                line.clear();
+                used = 0.;
+                if grapheme == "\n" {
+                    continue;
+                }
+            }
+            line.push_str(grapheme);
+            used += size;
+        }
+        if !line.is_empty() && rows < max_rows {
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 22.), egui::Sense::hover());
+            self.paint(ui, rect, &line, color);
+        }
     }
     pub fn paint(&mut self, ui: &egui::Ui, rect: Rect, text: &str, color: Color32) {
         if !ui.is_rect_visible(rect) {
@@ -64,6 +106,9 @@ impl EmojiAtlas {
             }
         };
         for grapheme in text.graphemes(true) {
+            if self.hidden && prospekt_dj::music_view::emoji_png(grapheme).is_some() {
+                continue;
+            }
             if grapheme.is_ascii() {
                 plain.push_str(grapheme);
                 continue;

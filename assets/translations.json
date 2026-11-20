@@ -287,18 +287,6 @@
     "Обновить теги",
     "ট্যাগ হালনাগাদ"
   ],
-  "Nowa skrzynka": [
-    "Nowa skrzynka",
-    "New crate",
-    "新建分类",
-    "नया क्रेट",
-    "Nueva caja",
-    "مجموعة جديدة",
-    "Nouveau bac",
-    "Nova caixa",
-    "Новый ящик",
-    "নতুন ক্রেট"
-  ],
   "Usuń": [
     "Usuń",
     "Remove",
@@ -911,18 +899,6 @@
     "Отмена — ожидание MIDI…",
     "বাতিল — MIDI এর অপেক্ষা…"
   ],
-  "SKRZYNKI / CRATES": [
-    "SKRZYNKI / CRATES",
-    "CRATES",
-    "分类箱",
-    "क्रेट",
-    "CAJAS",
-    "المجموعات",
-    "BACS",
-    "CAIXAS",
-    "ЯЩИКИ",
-    "ক্রেট"
-  ],
   "Następny >": [
     "Następny >",
     "Next >",
@@ -934,18 +910,6 @@
     "Próxima >",
     "Следующий >",
     "পরবর্তী >"
-  ],
-  "Usuń skrzynkę": [
-    "Usuń skrzynkę",
-    "Remove crate",
-    "删除分类箱",
-    "क्रेट हटाएँ",
-    "Eliminar caja",
-    "إزالة المجموعة",
-    "Supprimer le bac",
-    "Remover caixa",
-    "Удалить ящик",
-    "ক্রেট সরান"
   ],
   "Logo graficzne": [
     "Logo graficzne",
@@ -1007,18 +971,6 @@
     "Очистить загруженные обложки",
     "ডাউনলোড করা কভার মুছুন"
   ],
-  "Nowa podskrzynka": [
-    "Nowa podskrzynka",
-    "New subcrate",
-    "新建子曲库",
-    "नई उपक्रेट",
-    "Nueva subcarpeta virtual",
-    "صندوق فرعي جديد",
-    "Nouveau sous-bac",
-    "Nova subcaixa",
-    "Новый вложенный ящик",
-    "নতুন উপক্রেট"
-  ],
   "Zmień nazwę": [
     "Zmień nazwę",
     "Rename",
@@ -1066,18 +1018,6 @@
     "Atualizar pasta",
     "Обновить папку",
     "ফোল্ডার রিফ্রেশ"
-  ],
-  "Nazwa skrzynki": [
-    "Nazwa skrzynki",
-    "Crate name",
-    "曲库名称",
-    "क्रेट का नाम",
-    "Nombre de carpeta virtual",
-    "اسم الصندوق",
-    "Nom du bac",
-    "Nome da caixa",
-    "Название ящика",
-    "ক্রেটের নাম"
   ],
   "Zapisz": [
     "Zapisz",
@@ -1198,5 +1138,101 @@
     "Carregar mais pastas",
     "Загрузить ещё папки",
     "আরও ফোল্ডার লোড করুন"
+  ],
+  "Nowy BANGER BOX": [
+    "Nowy BANGER BOX",
+    "New BANGER BOX",
+    "新建 BANGER BOX",
+    "नया BANGER BOX",
+    "Nuevo BANGER BOX",
+    "BANGER BOX جديد",
+    "Nouveau BANGER BOX",
+    "Novo BANGER BOX",
+    "Новый BANGER BOX",
+    "নতুন BANGER BOX"
+  ],
+  "BANGER BOX": [
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX",
+    "BANGER BOX"
+  ],
+  "Usuń BANGER BOX": [
+    "Usuń BANGER BOX",
+    "Delete BANGER BOX",
+    "删除 BANGER BOX",
+    "BANGER BOX हटाएँ",
+    "Eliminar BANGER BOX",
+    "حذف BANGER BOX",
+    "Supprimer BANGER BOX",
+    "Excluir BANGER BOX",
+    "Удалить BANGER BOX",
+    "BANGER BOX মুছুন"
+  ],
+  "Nowy zagnieżdżony BANGER BOX": [
+    "Nowy zagnieżdżony BANGER BOX",
+    "New nested BANGER BOX",
+    "新建子 BANGER BOX",
+    "नया नेस्टेड BANGER BOX",
+    "Nuevo BANGER BOX anidado",
+    "BANGER BOX متداخل جديد",
+    "Nouveau BANGER BOX imbriqué",
+    "Novo BANGER BOX aninhado",
+    "Новый вложенный BANGER BOX",
+    "নতুন নেস্টেড BANGER BOX"
+  ],
+  "Nazwa BANGER BOX": [
+    "Nazwa BANGER BOX",
+    "BANGER BOX name",
+    "BANGER BOX 名称",
+    "BANGER BOX का नाम",
+    "Nombre del BANGER BOX",
+    "اسم BANGER BOX",
+    "Nom du BANGER BOX",
+    "Nome do BANGER BOX",
+    "Название BANGER BOX",
+    "BANGER BOX এর নাম"
+  ],
+  "Dodaj / usuń z BANGER BOX": [
+    "Dodaj / usuń z BANGER BOX",
+    "Add to / remove from BANGER BOX",
+    "添加到 / 从 BANGER BOX 移除",
+    "BANGER BOX में जोड़ें / हटाएँ",
+    "Añadir a / quitar de BANGER BOX",
+    "إضافة إلى / إزالة من BANGER BOX",
+    "Ajouter à / retirer du BANGER BOX",
+    "Adicionar a / remover de BANGER BOX",
+    "Добавить в / удалить из BANGER BOX",
+    "BANGER BOX এ যোগ / থেকে সরান"
+  ],
+  "Utwórz BANGER BOX po lewej stronie.": [
+    "Utwórz BANGER BOX po lewej stronie.",
+    "Create a BANGER BOX on the left.",
+    "在左侧创建 BANGER BOX。",
+    "बाईं ओर BANGER BOX बनाएँ।",
+    "Crea un BANGER BOX a la izquierda.",
+    "أنشئ BANGER BOX على اليسار.",
+    "Créez un BANGER BOX à gauche.",
+    "Crie um BANGER BOX à esquerda.",
+    "Создайте BANGER BOX слева.",
+    "বাম দিকে একটি BANGER BOX তৈরি করুন।"
+  ],
+  "Ten widok jest pusty. Dodaj pliki lub wybierz inny BANGER BOX.": [
+    "Ten widok jest pusty. Dodaj pliki lub wybierz inny BANGER BOX.",
+    "This view is empty. Add files or choose another BANGER BOX.",
+    "此视图为空。添加文件或选择其他 BANGER BOX。",
+    "यह दृश्य खाली है। फ़ाइलें जोड़ें या दूसरा BANGER BOX चुनें।",
+    "Esta vista está vacía. Añade archivos o elige otro BANGER BOX.",
+    "هذا العرض فارغ. أضف ملفات أو اختر BANGER BOX آخر.",
+    "Cette vue est vide. Ajoutez des fichiers ou choisissez un autre BANGER BOX.",
+    "Esta vista está vazia. Adicione arquivos ou escolha outro BANGER BOX.",
+    "Здесь пусто. Добавьте файлы или выберите другой BANGER BOX.",
+    "এই দৃশ্যটি খালি। ফাইল যোগ করুন বা অন্য BANGER BOX বেছে নিন।"
   ]
 }

@@ -116,6 +116,27 @@ impl Routing {
     }
 }
 
+/// A missing monitor pair may disable PFL, but must not silence a valid MASTER pair.
+pub fn resolve_routing(request: Routing, channels: u16) -> Result<(Routing, Option<String>)> {
+    match request.validate(channels) {
+        Ok(()) => Ok((request, None)),
+        Err(error) => {
+            let master_only = Routing {
+                master: request.master,
+                cue: None,
+            };
+            if request.cue.is_some() && master_only.validate(channels).is_ok() {
+                Ok((
+                    master_only,
+                    Some(format!("ASIO PFL disabled; MASTER remains active: {error}")),
+                ))
+            } else {
+                Err(error)
+            }
+        }
+    }
+}
+
 pub struct AudioRuntime {
     _master: cpal::Stream,
     _cue: Option<cpal::Stream>,
@@ -268,14 +289,20 @@ pub fn start_with_options(
         }
     }
     for supported in candidates.into_iter().take(24) {
-        if let Err(e) = routing.validate(supported.channels()) {
-            failures.push(e.to_string());
-            continue;
-        }
+        let (routing, route_warning) = match resolve_routing(routing, supported.channels()) {
+            Ok(value) => value,
+            Err(error) => {
+                failures.push(error.to_string());
+                continue;
+            }
+        };
         for buffer in buffer_attempts(options.buffer_frames, *supported.buffer_size()) {
             let mut config: cpal::StreamConfig = supported.clone().into();
             config.buffer_size = buffer;
             let mut candidate_warnings = warnings.clone();
+            if let Some(warning) = &route_warning {
+                candidate_warnings.push(warning.clone());
+            }
             if options.buffer_frames.is_some() && matches!(buffer, cpal::BufferSize::Default) {
                 candidate_warnings.push(
                     "Requested fixed buffer unavailable; using the driver's default buffer".into(),
@@ -372,27 +399,12 @@ fn start_configuration(
     warnings: &mut Vec<String>,
 ) -> Result<Streams> {
     let (cue_tx, cue_rx) = bounded::<Frame>(8192);
-    let cue = if options.backend == Backend::System && !options.cue_name.is_empty() {
-        let result = (|| -> Result<cpal::Stream> {
-            anyhow::ensure!(options.cue_name!=device_name(output),"MASTER and PFL refer to the same output. Use another device or ASIO channel-pair routing.");
-            let host = host(Backend::System)?;
-            let device = host
-                .output_devices()?
-                .find(|d| device_name(d) == options.cue_name)
-                .context("PFL output unavailable")?;
-            cue_stream(&device, cue_rx, config.sample_rate, errors.clone())
-        })();
-        match result {
-            Ok(stream) => Some(stream),
-            Err(e) => {
-                warnings.push(format!("PFL disabled; MASTER remains active: {e:#}"));
-                None
-            }
-        }
+    let cue_enabled = Arc::new(AtomicBool::new(false));
+    let sender = if options.backend == Backend::System && !options.cue_name.is_empty() {
+        Some((cue_tx, cue_enabled.clone()))
     } else {
         None
     };
-    let sender = if cue.is_some() { Some(cue_tx) } else { None };
     let (mut engine, warning) = Engine::with_store_or_memory(
         config.sample_rate,
         &crate::settings::config_path().with_file_name("tracks.sqlite"),
@@ -408,8 +420,10 @@ fn start_configuration(
             }
         }
         let (frame, phones) = engine.render();
-        if let Some(tx) = &sender {
-            let _ = tx.try_send(phones);
+        if let Some((tx, enabled)) = &sender {
+            if enabled.load(Ordering::Relaxed) {
+                let _ = tx.try_send(phones);
+            }
         }
         count += 1;
         if count >= 256 {
@@ -428,11 +442,35 @@ fn start_configuration(
         format,
         next,
         routing,
-        errors,
+        errors.clone(),
         healthy.clone(),
         frames.clone(),
     )?;
     stream.play().context("Starting MASTER stream")?;
+    // Open optional monitoring only after the primary stream is working.
+    let cue = if options.backend == Backend::System && !options.cue_name.is_empty() {
+        let result = (|| -> Result<cpal::Stream> {
+            anyhow::ensure!(options.cue_name!=device_name(output),"MASTER and PFL refer to the same output. Use another device or ASIO channel-pair routing.");
+            let host = host(Backend::System)?;
+            let device = host
+                .output_devices()?
+                .find(|d| device_name(d) == options.cue_name)
+                .context("PFL output unavailable")?;
+            cue_stream(&device, cue_rx, config.sample_rate, errors.clone())
+        })();
+        match result {
+            Ok(stream) => {
+                cue_enabled.store(true, Ordering::Relaxed);
+                Some(stream)
+            }
+            Err(e) => {
+                warnings.push(format!("PFL disabled; MASTER remains active: {e:#}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
     Ok((stream, cue, healthy, frames))
 }
 #[allow(clippy::too_many_arguments)]

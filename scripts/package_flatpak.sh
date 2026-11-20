@@ -36,6 +36,6 @@ META
 # Device access provides ALSA audio/MIDI. Other music folders use the file-picker portal.
 flatpak build-finish --command=prospekt-dj --share=network --share=ipc --socket=x11 --socket=pulseaudio --device=all --filesystem=xdg-music "$build"
 flatpak build-export --arch=x86_64 "$repo" "$build" beta
-flatpak build-bundle --arch=x86_64 --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo "$repo" "release-dist/Prospekt-DJ-Rust-${version}-linux-x64.flatpak" "$app_id" beta
-flatpak install --user --noninteractive -y "release-dist/Prospekt-DJ-Rust-${version}-linux-x64.flatpak"
+flatpak build-bundle --arch=x86_64 --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo "$repo" "release-dist/Prospekt-DJ-${version}-linux-x64.flatpak" "$app_id" beta
+flatpak install --user --noninteractive -y "release-dist/Prospekt-DJ-${version}-linux-x64.flatpak"
 flatpak info --user "$app_id"

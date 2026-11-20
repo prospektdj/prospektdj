@@ -51,7 +51,32 @@ fn tree_choice(
             },
         );
     }
-    emoji.paint(ui, rect, &label, ui.visuals().text_color());
+    if matches!(value, Scope::Loaded | Scope::Favorites) {
+        let icon_rect = egui::Rect::from_min_size(rect.min, Vec2::new(24., rect.height()));
+        emoji.paint(
+            ui,
+            icon_rect,
+            if value == Scope::Favorites {
+                "❤️"
+            } else {
+                "💿"
+            },
+            Color32::WHITE,
+        );
+        ui.painter().with_clip_rect(rect).text(
+            egui::pos2(rect.left() + 25., rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label.to_uppercase(),
+            FontId::new(12., egui::FontFamily::Name("Arial Bold".into())),
+            if value == Scope::Favorites {
+                Color32::from_rgb(255, 105, 160)
+            } else {
+                Color32::from_rgb(255, 35, 48)
+            },
+        );
+    } else {
+        emoji.paint(ui, rect, &label, ui.visuals().text_color());
+    }
     if response.clicked() {
         *current = value;
         response.mark_changed();
@@ -86,6 +111,7 @@ struct ArtTexture {
     used: u64,
 }
 enum WaveAction {
+    Zoom(f64),
     Seek(f64),
     Cue(usize),
 }
@@ -133,6 +159,9 @@ pub struct Studio {
     shared: Arc<Mutex<Snapshot>>,
     snapshot: Snapshot,
     runtime: Option<AudioRuntime>,
+    microphone: Option<prospekt_dj::microphone::Microphone>,
+    mic_names: Vec<String>,
+    mic_status: String,
     offline: Option<(Sender<()>, std::thread::JoinHandle<()>)>,
     errors: Receiver<String>,
     error_tx: Sender<String>,
@@ -148,6 +177,14 @@ pub struct Studio {
     db_dirty: bool,
     db_save: Option<(Sender<Catalog>, std::thread::JoinHandle<()>)>,
     index_jobs: usize,
+    recommendation_job: Option<(
+        String,
+        Receiver<Vec<prospekt_dj::recommendations::Suggestion>>,
+    )>,
+    recommendation_results: Vec<prospekt_dj::recommendations::Suggestion>,
+    recommendation_context: String,
+    recommendation_updated: Option<Instant>,
+    recommendation_selected: usize,
     crate_editor: Option<CrateEditor>,
     folders: prospekt_dj::folder_tree::Folders,
     artwork: prospekt_dj::artwork::Artwork,
@@ -176,6 +213,9 @@ pub struct Studio {
     deck_tokens: [u64; 4],
     sample_tokens: [u64; 4],
     loading: [bool; 4],
+    eject_pending: Option<(usize, String, u64)>,
+    reverse_requested: [bool; 4],
+    reverse_sent: [bool; 4],
     covers: [Option<egui::TextureHandle>; 4],
     taps: [Vec<Instant>; 4],
     synced_at: [Option<Instant>; 4],
@@ -189,6 +229,10 @@ pub struct Studio {
     midi_connection: Option<midi::Connection>,
     midi_reconnect_name: Option<String>,
     midi_poll: Instant,
+    midi_scan: Option<Receiver<Vec<String>>>,
+    controller_notices: std::collections::VecDeque<String>,
+    detected_profile: Option<usize>,
+    detected_status: String,
     midi_tx: Sender<Vec<u8>>,
     midi_rx: Receiver<Vec<u8>>,
     learn: bool,
@@ -301,6 +345,9 @@ impl Studio {
             shared: Arc::new(Mutex::new(Snapshot::default())),
             snapshot: Snapshot::default(),
             runtime: None,
+            microphone: None,
+            mic_names: Vec::new(),
+            mic_status: String::new(),
             offline: None,
             errors,
             error_tx,
@@ -316,6 +363,11 @@ impl Studio {
             db_dirty: false,
             db_save: Some((db_tx, db_thread)),
             index_jobs: 0,
+            recommendation_job: None,
+            recommendation_results: Vec::new(),
+            recommendation_context: String::new(),
+            recommendation_updated: None,
+            recommendation_selected: 0,
             crate_editor: None,
             folders: Default::default(),
             artwork,
@@ -340,10 +392,13 @@ impl Studio {
             library_focus: false,
             dock_tab,
             zoom: 8.,
-            status: "Gotowy · PRE-BETA · Rust Edition · pliki pozostają na komputerze".into(),
+            status: "Gotowy · pre-beta 0.0.1 · pliki pozostają na komputerze".into(),
             deck_tokens: [0; 4],
             sample_tokens: [0; 4],
             loading: [false; 4],
+            eject_pending: None,
+            reverse_requested: [false; 4],
+            reverse_sent: [false; 4],
             covers: std::array::from_fn(|_| None),
             taps: std::array::from_fn(|_| Vec::new()),
             synced_at: [None; 4],
@@ -356,7 +411,11 @@ impl Studio {
             midi_selected: 0,
             midi_connection: None,
             midi_reconnect_name: None,
-            midi_poll: Instant::now(),
+            midi_poll: Instant::now() - Duration::from_secs(3),
+            midi_scan: None,
+            controller_notices: Default::default(),
+            detected_profile: None,
+            detected_status: String::new(),
             midi_tx,
             midi_rx,
             learn: false,
@@ -447,6 +506,8 @@ impl Studio {
         }
         self.stop_auto();
         self.settings.effects = self.snapshot.decks.iter().map(|d| d.fx).collect();
+        self.microphone = None;
+        self.send(Command::Microphone(None));
         self.runtime = None;
         if let Some((stop, thread)) = self.offline.take() {
             let _ = stop.send(());
@@ -933,8 +994,7 @@ impl Studio {
                             for i in 0..4 {
                                 self.send(Command::Deck(i, DeckControl::PadMode(PadMode::Sampler)));
                             }
-                            self.dock_tab = 1;
-                            self.settings.show_effects = true;
+                            self.dock_tab = 0;
                         }
                         Err(error) => self.status = error,
                     }
@@ -986,23 +1046,48 @@ impl Studio {
         while let Ok(bytes) = self.midi_rx.try_recv() {
             self.midi_message(&bytes);
         }
-        if self.midi_poll.elapsed() > Duration::from_secs(2) {
-            self.midi_poll = Instant::now();
-            if let Some(name) = self.midi_reconnect_name.clone() {
-                self.midi_names = midi::inputs();
-                if let Some(index) = self.midi_names.iter().position(|n| n == &name) {
-                    self.midi_selected = index;
-                    if self.midi_connection.is_none() {
-                        if let Ok(connection) = midi::connect(index, self.midi_tx.clone()) {
-                            self.midi_connection = Some(connection);
-                            self.status = format!("MIDI połączone ponownie: {name}");
+        if let Some(scan) = &self.midi_scan {
+            if let Ok(names) = scan.try_recv() {
+                let new_ports: Vec<_> = names
+                    .iter()
+                    .filter(|name| !self.midi_names.contains(name))
+                    .cloned()
+                    .collect();
+                self.midi_names = names;
+                self.midi_scan = None;
+                for name in new_ports {
+                    self.controller_notices.push_back(name);
+                }
+                if let Some(name) = self.midi_reconnect_name.clone() {
+                    if let Some(index) = self.midi_names.iter().position(|n| n == &name) {
+                        self.midi_selected = index;
+                        if self.midi_connection.is_none() {
+                            match midi::connect_named(&name, self.midi_tx.clone()) {
+                                Ok(connection) => {
+                                    self.midi_connection = Some(connection);
+                                    self.status = format!("MIDI połączone ponownie: {name}");
+                                }
+                                Err(error) => {
+                                    self.status = format!("Nie można połączyć MIDI: {error:#}")
+                                }
+                            }
                         }
+                    } else if self.midi_connection.take().is_some() {
+                        self.status =
+                            format!("MIDI odłączone: {name} — czekam na ponowne podłączenie");
                     }
-                } else if self.midi_connection.take().is_some() {
-                    self.status = format!("MIDI odłączone: {name} — czekam na ponowne podłączenie");
                 }
             }
         }
+        if self.midi_poll.elapsed() > Duration::from_secs(2) && self.midi_scan.is_none() {
+            self.midi_poll = Instant::now();
+            let (tx, rx) = bounded(1);
+            std::thread::spawn(move || {
+                let _ = tx.send(midi::inputs());
+            });
+            self.midi_scan = Some(rx);
+        }
+        self.sync_microphone();
         self.tick_auto();
         if self.last_save.elapsed() > Duration::from_secs(5) {
             self.persist();
@@ -1360,18 +1445,6 @@ impl Studio {
             });
         }
         ui.add_space(3.);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("RGB WAVEFORMS").small().strong());
-            ui.label(
-                RichText::new("LOW / MID / HIGH · siatka BPM + CUE")
-                    .small()
-                    .weak(),
-            );
-            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                ui.spacing_mut().slider_width = 85.;
-                ui.add(egui::Slider::new(&mut self.zoom, 2.0..=16.).text("s"));
-            });
-        });
         for (i, accent) in ACCENTS.iter().take(self.settings.deck_count).enumerate() {
             let view = self.snapshot.decks[i].clone();
             if let Some(pos) = waveform(
@@ -1384,9 +1457,9 @@ impl Studio {
                         ui.ctx().screen_rect().height() < 850.,
                     ) {
                         (true, true) => 24.,
-                        (true, false) => 36.,
-                        (false, true) => 30.,
-                        _ => 45.,
+                        (true, false) => 32.,
+                        (false, true) => 40.,
+                        _ => 60.,
                     },
                 Some(self.zoom),
                 &self.settings.wave_style,
@@ -1423,6 +1496,10 @@ impl Studio {
                         |ui| {
                             ui.set_min_width(info);
                             self.deck_info(ui, i, &d);
+                            if !show_platter {
+                                self.transport_ui(ui, i, &d);
+                                self.jog_utilities(ui, i, &d);
+                            }
                         },
                     );
                     if show_platter && i.is_multiple_of(2) {
@@ -1433,26 +1510,136 @@ impl Studio {
     }
     fn wave_action(&mut self, i: usize, action: WaveAction) {
         match action {
+            WaveAction::Zoom(seconds) => self.zoom = seconds,
             WaveAction::Seek(pos) => self.deck(i, DeckControl::Seek(pos)),
             WaveAction::Cue(n) => self.deck(i, DeckControl::HotCue(n, false)),
         }
     }
     fn jog_panel(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
         ui.allocate_ui_with_layout(
-            Vec2::new(186., 174.),
+            Vec2::new(186., 236.),
             egui::Layout::top_down(Align::Min),
             |ui| {
                 ui.horizontal_top(|ui| {
                     if i % 2 == 1 {
                         self.pitch_bend(ui, i);
                     }
-                    self.white_platter(ui, i, d);
+                    ui.vertical(|ui| {
+                        ui.set_width(148.);
+                        self.white_platter(ui, i, d);
+                        self.transport_ui(ui, i, d);
+                        self.jog_utilities(ui, i, d);
+                    });
                     if i.is_multiple_of(2) {
                         self.pitch_bend(ui, i);
                     }
                 });
             },
         );
+    }
+    fn transport_ui(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
+        ui.push_id(("jog-transport", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
+                let accent = ACCENTS[i];
+                let blink = self.settings.blink_paused_play
+                    && !self.settings.reduced_motion
+                    && d.track.is_some()
+                    && !d.playing;
+                let play_lit = d.playing
+                    || (blink
+                        && ui.input(|input| ((input.time * 2.).floor() as u64).is_multiple_of(2)));
+                if blink {
+                    ui.ctx().request_repaint_after(Duration::from_millis(33));
+                }
+                if transport_button(
+                    ui,
+                    if d.playing { "Ⅱ" } else { "▶" },
+                    play_lit,
+                    accent,
+                    self.settings.reduced_motion,
+                    48.,
+                )
+                .clicked()
+                {
+                    self.play(i);
+                }
+                if transport_button(ui, "CUE", false, accent, self.settings.reduced_motion, 48.)
+                    .clicked()
+                {
+                    self.deck(i, DeckControl::Cue);
+                }
+                let utilities_width = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<f32>(egui::Id::new(("jog-utilities-width", i))))
+                    .unwrap_or(148.);
+                if transport_button(
+                    ui,
+                    "SYNC",
+                    self.synced_at[i].is_some_and(|t| t.elapsed() < Duration::from_millis(350)),
+                    accent,
+                    self.settings.reduced_motion,
+                    (utilities_width - 100.).max(48.),
+                )
+                .on_hover_text("One-shot tempo match")
+                .clicked()
+                {
+                    self.sync(i);
+                }
+            });
+        });
+    }
+    fn jog_utilities(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
+        ui.push_id(("jog-utilities", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
+                let button = |ui: &mut egui::Ui, text: &str, width: f32, active: bool| {
+                    ui.add_sized(
+                        [width, 24.],
+                        egui::Button::new(RichText::new(text).size(9.).color(if active {
+                            ACCENTS[i]
+                        } else {
+                            Color32::from_gray(220)
+                        }))
+                        .fill(Color32::from_gray(26))
+                        .stroke(Stroke::new(
+                            2_f32,
+                            if active {
+                                ACCENTS[i]
+                            } else {
+                                Color32::from_gray(70)
+                            },
+                        ))
+                        .corner_radius(0.),
+                    )
+                };
+                let set_cue = button(ui, "SET CUE", 45., false);
+                if set_cue.clicked() {
+                    self.deck(i, DeckControl::SetCue);
+                }
+                if button(ui, "PFL", 25., d.pfl).clicked() {
+                    self.send(Command::Deck(i, DeckControl::Pfl));
+                }
+                if button(ui, "VINYL", 36., d.scratch).clicked() {
+                    self.deck(i, DeckControl::ScratchMode);
+                }
+                let minus = button(ui, "−", 17., false);
+                let plus = button(ui, "+", 17., false);
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(
+                        egui::Id::new(("jog-utilities-width", i)),
+                        plus.rect.right() - set_cue.rect.left(),
+                    )
+                });
+                self.bend_buttons[i] = if minus.is_pointer_button_down_on() {
+                    -0.04
+                } else if plus.is_pointer_button_down_on() {
+                    0.04
+                } else {
+                    0.
+                };
+            });
+        });
     }
     fn pitch_bend(&mut self, ui: &mut egui::Ui, i: usize) {
         ui.allocate_ui_with_layout(
@@ -1519,10 +1706,20 @@ impl Studio {
             }
         }
     }
+    fn reverse_button(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) -> egui::Response {
+        let response = jog_action_button(
+            ui,
+            "R",
+            d.track.is_some() && d.playing && !self.loading[i],
+            d.reverse,
+        );
+        self.reverse_requested[i] = response.is_pointer_button_down_on();
+        response.on_hover_text("REVERS / Slip Reverse: trzymaj, aby grać do tyłu. Puść, aby wrócić do bieżącego miejsca utworu.")
+    }
     fn white_platter(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
         let (response, p) = ui.allocate_painter(Vec2::new(148., 174.), Sense::click_and_drag());
         let center = egui::pos2(response.rect.center().x, response.rect.top() + 75.);
-        let text = if self.settings.light {
+        let text = if self.settings.white_jog {
             Color32::BLACK
         } else {
             Color32::from_gray(235)
@@ -1531,8 +1728,8 @@ impl Studio {
         p.circle_filled(
             center,
             65.,
-            if self.settings.light {
-                Color32::from_gray(228)
+            if self.settings.white_jog {
+                Color32::WHITE
             } else {
                 Color32::from_gray(12)
             },
@@ -1569,7 +1766,7 @@ impl Studio {
         }
         for (dy, label, size, color) in [
             (
-                -23.,
+                -39.,
                 if d.track.is_some() {
                     format!("{:.2}", d.bpm * d.rate * (1. + self.bend[i]))
                 } else {
@@ -1579,13 +1776,13 @@ impl Studio {
                 text,
             ),
             (
-                -3.,
+                -13.,
                 format!("{:+.1}%   ±50%", (d.rate - 1.) * 100.),
                 10.,
                 text,
             ),
             (
-                15.,
+                31.,
                 if d.track.is_some() {
                     short_time(d.position)
                 } else {
@@ -1595,35 +1792,84 @@ impl Studio {
                 text,
             ),
             (
-                32.,
+                49.,
                 d.track
                     .as_ref()
                     .map(|t| format!("−{}", short_time((t.duration() - d.position).max(0.))))
                     .unwrap_or_else(|| "—:—".into()),
                 13.,
-                Color32::GRAY,
+                text,
             ),
         ] {
             p.text(
                 center + egui::vec2(0., dy),
                 egui::Align2::CENTER_CENTER,
                 label,
-                FontId::monospace(size),
+                if size >= 13. {
+                    FontId::new(size, egui::FontFamily::Name("Arial Bold".into()))
+                } else {
+                    FontId::proportional(size)
+                },
                 color,
             );
         }
+        if d.track.is_some() && !self.settings.reduced_motion {
+            // Follow the source playhead: pause holds the hand, reverse turns it back.
+            let angle = (d.position.rem_euclid(2.) as f32) * std::f32::consts::PI
+                - std::f32::consts::FRAC_PI_2;
+            let direction = Vec2::angled(angle);
+            let needle = Color32::BLACK;
+            if !self.settings.white_jog {
+                p.line_segment(
+                    [center - direction * 9., center + direction * 61.],
+                    Stroke::new(11_f32, Color32::from_gray(95)),
+                );
+            }
+            p.line_segment(
+                [center - direction * 9., center + direction * 61.],
+                Stroke::new(9_f32, needle),
+            );
+            p.circle_filled(center, 7.2, Color32::from_rgb(153, 221, 255));
+            if d.playing {
+                ui.ctx().request_repaint_after(Duration::from_millis(33));
+            }
+        }
         p.text(
-            egui::pos2(center.x, response.rect.top() + 161.),
+            egui::pos2(center.x - 18., response.rect.top() + 161.),
             egui::Align2::CENTER_CENTER,
             if d.scratch { "VINYL" } else { "JOG / BEND" },
             FontId::monospace(9.),
             ACCENTS[i],
         );
-        if response.drag_started() {
+        let reverse_rect = egui::Rect::from_min_size(
+            response.rect.right_top() + egui::vec2(-48., 150.),
+            Vec2::splat(22.),
+        );
+        let reverse = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(reverse_rect), |ui| {
+                self.reverse_button(ui, i, d)
+            })
+            .inner;
+        let eject_rect = egui::Rect::from_min_size(
+            response.rect.right_top() + egui::vec2(-22., 150.),
+            Vec2::splat(22.),
+        );
+        let eject = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(eject_rect), |ui| {
+                jog_action_button(ui, "↑", d.track.is_some() && !self.loading[i], false)
+            })
+            .inner
+            .on_hover_text("Wyrzuć utwór z deku");
+        if eject.clicked() {
+            if let Some(track) = &d.track {
+                self.eject_pending = Some((i, track.id.clone(), self.deck_tokens[i]));
+            }
+        }
+        if response.drag_started() && !eject.contains_pointer() && !reverse.contains_pointer() {
             self.stop_auto();
             self.focused = i;
         }
-        if response.dragged() {
+        if response.dragged() && !eject.contains_pointer() && !reverse.contains_pointer() {
             let delta = ui.input(|input| input.pointer.delta().x);
             self.send(Command::Deck(
                 i,
@@ -1644,9 +1890,26 @@ impl Studio {
     fn deck_info(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
         let accent = ACCENTS[i];
         ui.horizontal(|ui| {
-            ui.label(RichText::new(letter(i)).small().strong().color(accent));
+            ui.label(
+                RichText::new(letter(i))
+                    .small()
+                    .family(egui::FontFamily::Name("Arial Bold".into()))
+                    .color(accent),
+            );
             if ui.small_button("LOAD").clicked() {
                 self.pick_track(i);
+            }
+            if ui.ctx().screen_rect().width() < 1200.
+                && jog_action_button(ui, "↑", d.track.is_some() && !self.loading[i], false)
+                    .on_hover_text("Wyrzuć utwór z deku")
+                    .clicked()
+            {
+                if let Some(track) = &d.track {
+                    self.eject_pending = Some((i, track.id.clone(), self.deck_tokens[i]));
+                }
+            }
+            if ui.ctx().screen_rect().width() < 1200. {
+                self.reverse_button(ui, i, d);
             }
             if self.loading[i] {
                 ui.spinner();
@@ -1677,7 +1940,7 @@ impl Studio {
                                 .unwrap_or("Załaduj utwór"),
                         )
                         .size(13.)
-                        .strong(),
+                        .family(egui::FontFamily::Name("Arial Bold".into())),
                     )
                     .truncate(),
                 );
@@ -1704,32 +1967,6 @@ impl Studio {
         });
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.;
-            if transport_button(
-                ui,
-                if d.playing { "Ⅱ" } else { "▶" },
-                d.playing,
-                accent,
-                self.settings.reduced_motion,
-            )
-            .clicked()
-            {
-                self.play(i);
-            }
-            if ui.small_button("CUE").clicked() {
-                self.deck(i, DeckControl::Cue);
-            }
-            if transport_button(
-                ui,
-                "SYNC",
-                self.synced_at[i].is_some_and(|t| t.elapsed() < Duration::from_millis(350)),
-                accent,
-                self.settings.reduced_motion,
-            )
-            .on_hover_text("One-shot tempo match")
-            .clicked()
-            {
-                self.sync(i);
-            }
             let mut bpm = d.bpm;
             let response = ui.add(
                 egui::DragValue::new(&mut bpm)
@@ -1759,15 +1996,7 @@ impl Studio {
                         ui.close_menu();
                     }
                 });
-            ui.spacing_mut().slider_width = 54.;
-            let mut pitch = (d.rate - 1.) * 100.;
-            let response = ui.add(egui::Slider::new(&mut pitch, -50.0..=50.).show_value(false));
-            if response.changed() {
-                self.deck(i, DeckControl::Rate(1. + pitch / 100.));
-            }
-            if response.double_clicked() {
-                self.deck(i, DeckControl::Rate(1.));
-            }
+            let pitch = (d.rate - 1.) * 100.;
             ui.label(RichText::new(format!("{pitch:+.1}%")).size(10.).monospace());
         });
         let controls = 98.;
@@ -1805,25 +2034,6 @@ impl Studio {
         }
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.;
-            if ui.small_button("SET CUE").clicked() {
-                self.deck(i, DeckControl::SetCue);
-            }
-            if ui.selectable_label(d.pfl, "PFL").clicked() {
-                self.send(Command::Deck(i, DeckControl::Pfl));
-            }
-            if ui.selectable_label(d.scratch, "VINYL").clicked() {
-                self.deck(i, DeckControl::ScratchMode);
-            }
-            let minus = ui.small_button("−");
-            let plus = ui.small_button("+");
-            let amount = if minus.is_pointer_button_down_on() {
-                -0.04
-            } else if plus.is_pointer_button_down_on() {
-                0.04
-            } else {
-                0.
-            };
-            self.bend_buttons[i] = amount;
             if let Some(key) = d
                 .track
                 .as_ref()
@@ -1946,10 +2156,10 @@ impl Studio {
                     } else {
                         Color32::from_gray(if active { 17 } else { 8 })
                     };
-                    ui.painter().rect_filled(rect, 1., fill);
+                    ui.painter().rect_filled(rect, 0., fill);
                     ui.painter().rect_stroke(
                         rect.shrink(0.5),
-                        1.,
+                        0.,
                         Stroke::new(1_f32, color.gamma_multiply(if active { 1. } else { 0.35 })),
                         egui::StrokeKind::Inside,
                     );
@@ -1987,6 +2197,53 @@ impl Studio {
             });
         }
     }
+    fn sync_microphone(&mut self) {
+        if let Some(mic) = &self.microphone {
+            if !mic.is_running() {
+                self.mic_status = format!(
+                    "Mikrofon zatrzymany: {}",
+                    mic.error().unwrap_or_else(|| "błąd wejścia".into())
+                );
+                self.settings.mic_enabled = false;
+            }
+        }
+        let output_rate = self
+            .runtime
+            .as_ref()
+            .filter(|runtime| runtime.is_running())
+            .map(|runtime| runtime.sample_rate);
+        if !self.settings.mic_enabled || output_rate.is_none() {
+            if self.microphone.take().is_some() {
+                self.send(Command::Microphone(None));
+            }
+            return;
+        }
+        let rate = output_rate.unwrap();
+        if self
+            .microphone
+            .as_ref()
+            .is_some_and(|mic| mic.output_rate != rate)
+        {
+            self.microphone = None;
+            self.send(Command::Microphone(None));
+        }
+        if self.microphone.is_none() {
+            match prospekt_dj::microphone::start(&self.settings.mic_device, rate) {
+                Ok((microphone, input)) => {
+                    self.mic_status =
+                        format!("MIC ON: {} · kanał wejściowy 1", microphone.device_name);
+                    self.send(Command::Microphone(Some(input)));
+                    self.send(Command::MicVolume(self.settings.mic_volume));
+                    self.microphone = Some(microphone);
+                }
+                Err(error) => {
+                    self.mic_status = format!("Nie można uruchomić mikrofonu: {error:#}");
+                    self.status = self.mic_status.clone();
+                    self.settings.mic_enabled = false;
+                }
+            }
+        }
+    }
     fn header_audio_controls(&mut self, ui: &mut egui::Ui) {
         let s = self.snapshot.clone();
         let mut master = s.master;
@@ -2015,41 +2272,47 @@ impl Studio {
         {
             self.send(Command::Phones(phones));
         }
+        let mut mic = self.settings.mic_volume;
+        if ui
+            .add(
+                Knob::new(&mut mic, 0.0..=1.)
+                    .default(0.7)
+                    .label("MIC")
+                    .unit("%")
+                    .size(20.),
+            )
+            .on_hover_text(if self.settings.mic_enabled {
+                "Poziom mikrofonu · ustawienia audio: wybór wejścia"
+            } else {
+                "Mikrofon wyłączony · włącz w Ustawienia → Audio → Mikrofon"
+            })
+            .changed()
+        {
+            self.settings.mic_volume = mic;
+            self.send(Command::MicVolume(mic));
+        }
         let recording = self.record_result.is_some();
         let response = ui
-            .add_enabled_ui(!self.record_stopping, |ui| {
-                let (rect, response) = ui.allocate_exact_size(Vec2::splat(20.), Sense::click());
-                let red = if response.hovered() {
-                    Color32::from_rgb(255, 85, 85)
-                } else {
-                    Color32::from_rgb(225, 42, 52)
-                };
-                if self.record_stopping {
-                    ui.painter()
-                        .circle_stroke(rect.center(), 7., Stroke::new(2_f32, red));
-                } else if recording {
-                    ui.painter().rect_filled(
-                        egui::Rect::from_center_size(rect.center(), Vec2::splat(12.)),
-                        1.,
-                        red,
-                    );
-                } else {
-                    ui.painter().circle_filled(rect.center(), 7., red);
-                }
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Button,
-                        ui.is_enabled(),
-                        if recording {
-                            "Zatrzymaj nagrywanie"
+            .add_enabled(
+                !self.record_stopping,
+                egui::Button::new(
+                    RichText::new(if self.record_stopping { "…" } else { "REC" })
+                        .family(egui::FontFamily::Name("Arial Bold".into()))
+                        .color(if recording {
+                            Color32::WHITE
                         } else {
-                            "Nagraj miks"
-                        },
-                    )
-                });
-                response
-            })
-            .inner
+                            Color32::from_rgb(255, 45, 55)
+                        }),
+                )
+                .fill(if recording {
+                    Color32::from_rgb(180, 20, 30)
+                } else {
+                    Color32::from_gray(26)
+                })
+                .stroke(Stroke::new(2_f32, Color32::from_rgb(225, 42, 52)))
+                .corner_radius(0)
+                .min_size(Vec2::new(44., 28.)),
+            )
             .on_hover_text(if self.record_stopping {
                 "Kończenie zapisu…"
             } else if recording {
@@ -2062,48 +2325,53 @@ impl Studio {
         }
     }
     fn mixer_eq_column(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.;
-            for (band, (name, color)) in [
-                ("HIGH", Color32::from_rgb(40, 200, 0)),
-                ("MID", Color32::from_rgb(255, 215, 0)),
-                ("LOW", Color32::from_rgb(230, 0, 0)),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let mut value = d.eq[band];
+        ui.allocate_ui_with_layout(
+            Vec2::new(36., 180.),
+            egui::Layout::top_down(Align::Center),
+            |ui| {
+                ui.set_width(36.);
+                ui.spacing_mut().item_spacing.y = 0.;
+                for (band, (name, color)) in [
+                    ("HIGH", Color32::from_rgb(40, 200, 0)),
+                    ("MID", Color32::from_rgb(255, 215, 0)),
+                    ("LOW", Color32::from_rgb(230, 0, 0)),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let mut value = d.eq[band];
+                    if ui
+                        .add(
+                            Knob::new(&mut value, -24.0..=12.)
+                                .label(name)
+                                .unit("dB")
+                                .color(color)
+                                .size(24.),
+                        )
+                        .changed()
+                    {
+                        self.send(Command::Deck(i, DeckControl::Eq(band, value)));
+                    }
+                }
                 if ui
-                    .add(
-                        Knob::new(&mut value, -24.0..=12.)
-                            .label(name)
-                            .unit("dB")
-                            .color(color)
-                            .size(24.),
-                    )
+                    .selectable_label(d.fx.filter_enabled, "F")
+                    .on_hover_text("Enable LPF / HPF")
+                    .clicked()
+                {
+                    self.send(Command::Deck(i, DeckControl::FxToggle(FxSwitch::Filter)));
+                }
+                let mut filter = d.fx.filter;
+                if ui
+                    .add(Knob::new(&mut filter, -1.0..=1.).label("FILTER").size(24.))
                     .changed()
                 {
-                    self.send(Command::Deck(i, DeckControl::Eq(band, value)));
+                    self.send(Command::Deck(
+                        i,
+                        DeckControl::FxParam(FxParam::Filter, filter),
+                    ));
                 }
-            }
-            if ui
-                .selectable_label(d.fx.filter_enabled, "F")
-                .on_hover_text("Enable LPF / HPF")
-                .clicked()
-            {
-                self.send(Command::Deck(i, DeckControl::FxToggle(FxSwitch::Filter)));
-            }
-            let mut filter = d.fx.filter;
-            if ui
-                .add(Knob::new(&mut filter, -1.0..=1.).label("FILTER").size(24.))
-                .changed()
-            {
-                self.send(Command::Deck(
-                    i,
-                    DeckControl::FxParam(FxParam::Filter, filter),
-                ));
-            }
-        });
+            },
+        );
     }
     fn mixer_fader_column(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
         ui.allocate_ui_with_layout(
@@ -2126,21 +2394,16 @@ impl Studio {
                     self.send(Command::Deck(i, DeckControl::Gain(gain)));
                 }
                 ui.label(RichText::new(letter(i)).size(9.).color(ACCENTS[i]));
-                ui.spacing_mut().slider_width = 88.;
+                ui.spacing_mut().slider_width = 100.;
+                ui.spacing_mut().slider_rail_height = 2.;
                 let mut volume = d.volume;
                 let response = ui.add(
                     egui::Slider::new(&mut volume, 0.0..=1.)
                         .vertical()
+                        .trailing_fill(false)
+                        .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.35 })
                         .show_value(false),
                 );
-                let r = response.rect;
-                for n in 0..=10 {
-                    let y = r.bottom() - r.height() * n as f32 / 10.;
-                    ui.painter().line_segment(
-                        [egui::pos2(r.left() - 4., y), egui::pos2(r.left() - 1., y)],
-                        Stroke::new(1_f32, Color32::from_gray(100)),
-                    );
-                }
                 if response.changed() {
                     self.send(Command::Deck(i, DeckControl::Volume(volume)));
                 }
@@ -2159,8 +2422,10 @@ impl Studio {
             .fill(Color32::from_gray(26))
             .inner_margin(3)
             .show(ui, |ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(2., 1.);
+                ui.set_width(196.);
+                ui.spacing_mut().item_spacing = Vec2::new(2., 4.);
                 ui.horizontal_top(|ui| {
+                    ui.add_space(10.);
                     self.mixer_eq_column(ui, start, &s.decks[start]);
                     self.mixer_fader_column(ui, start, &s.decks[start]);
                     ui.vertical(|ui| {
@@ -2174,9 +2439,20 @@ impl Studio {
                     self.mixer_fader_column(ui, start + 1, &s.decks[start + 1]);
                     self.mixer_eq_column(ui, start + 1, &s.decks[start + 1]);
                 });
-                ui.spacing_mut().slider_width = 170.;
+                ui.spacing_mut().slider_width = 184.;
+                ui.spacing_mut().slider_rail_height = 2.;
                 let mut cross = s.cross;
-                let response = ui.add(egui::Slider::new(&mut cross, 0.0..=1.).show_value(false));
+                let response = ui
+                    .horizontal(|ui| {
+                        ui.add_space(6.);
+                        ui.add(
+                            egui::Slider::new(&mut cross, 0.0..=1.)
+                                .trailing_fill(false)
+                                .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.35 })
+                                .show_value(false),
+                        )
+                    })
+                    .inner;
                 if response.changed() {
                     self.stop_auto();
                     self.send(Command::Cross(cross));
@@ -2187,79 +2463,23 @@ impl Studio {
                 }
             });
     }
-    fn mixer_ui(&mut self, ui: &mut egui::Ui) {
-        let s = self.snapshot.clone();
-        ui.columns(self.settings.deck_count, |columns| {
-            for (i, column) in columns.iter_mut().enumerate() {
-                egui::Frame::group(column.style()).show(column, |ui| {
-                    ui.label(
-                        RichText::new(format!("CHANNEL {} / EQ", letter(i)))
-                            .small()
-                            .strong()
-                            .color(ACCENTS[i]),
-                    );
-                    ui.horizontal(|ui| {
-                        for (band, label) in ["HIGH", "MID", "LOW"].iter().enumerate() {
-                            let mut gain = s.decks[i].eq[band];
-                            if ui
-                                .add(
-                                    Knob::new(&mut gain, -24.0..=12.)
-                                        .label(label)
-                                        .unit("dB")
-                                        .color(ACCENTS[i])
-                                        .size(24.),
-                                )
-                                .changed()
-                            {
-                                self.send(Command::Deck(i, DeckControl::Eq(band, gain)));
-                            }
-                        }
-                        let mut volume = s.decks[i].gain_db;
-                        if ui
-                            .add(
-                                Knob::new(&mut volume, -24.0..=12.)
-                                    .default(0.)
-                                    .label("GAIN")
-                                    .unit("dB")
-                                    .color(ACCENTS[i])
-                                    .size(24.),
-                            )
-                            .changed()
-                        {
-                            self.send(Command::Deck(i, DeckControl::Gain(volume)));
-                        }
-                        meter(ui, s.decks[i].level, ACCENTS[i], 60.);
-                    });
-                });
-            }
-        });
-    }
     fn dock_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            for (i, label) in [(0, "DJ-FX"), (2, "Mixer")] {
-                if ui
-                    .selectable_label(self.settings.show_effects && self.dock_tab == i, label)
-                    .clicked()
-                {
-                    if self.dock_tab == i && self.settings.show_effects {
-                        self.settings.show_effects = false;
-                    } else {
-                        self.settings.show_effects = true;
-                        self.dock_tab = i;
-                    }
-                }
+            if ui
+                .selectable_label(self.settings.show_effects, "DJ-FX")
+                .clicked()
+            {
+                self.settings.show_effects = !self.settings.show_effects;
+                self.dock_tab = 0;
             }
         });
         if self.settings.show_effects {
-            match self.dock_tab {
-                0 => self.effects_ui(ui),
-                _ => self.mixer_ui(ui),
-            }
+            self.effects_ui(ui);
         }
     }
     fn effects_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("FX RACK").strong());
+            ui.label(RichText::new("FX RACK").family(egui::FontFamily::Name("Arial Bold".into())));
             for (i, accent) in ACCENTS.iter().take(self.settings.deck_count).enumerate() {
                 ui.selectable_value(
                     &mut self.fx_deck,
@@ -2323,7 +2543,7 @@ impl Studio {
                                     ["01  FILTER", "02  ECHO", "03  REVERB", "04  FLANGER"][unit],
                                 )
                                 .small()
-                                .strong(),
+                                .family(egui::FontFamily::Name("Arial Bold".into())),
                             );
                             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                                 let label = if *enabled { "ON" } else { "OFF" };
@@ -2643,7 +2863,19 @@ impl Studio {
     }
     fn library_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(tr("KOLEKCJA")).strong().size(13.));
+            if self.settings.banger_site_name {
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(22., 21.), Sense::hover());
+                self.emoji.paint(ui, rect, "🔥", Color32::WHITE);
+            }
+            ui.label(
+                RichText::new(if self.settings.banger_site_name {
+                    "BANGER SITE".to_owned()
+                } else {
+                    "Kolekcja".to_owned()
+                })
+                .family(egui::FontFamily::Name("Arial Bold".into()))
+                .size(13.),
+            );
             if ui
                 .add(
                     egui::TextEdit::singleline(&mut self.search)
@@ -2670,6 +2902,7 @@ impl Studio {
             {
                 self.index_paths(self.library.clone(), true);
             }
+            ui.checkbox(&mut self.settings.live_recommendations, "Rekomendacje live");
             if self.index_jobs > 0 {
                 ui.spinner();
                 ui.label(RichText::new("Indeksowanie…").small());
@@ -2724,12 +2957,14 @@ impl Studio {
                     }
                     egui::ScrollArea::horizontal()
                         .id_salt("table-columns")
+                        .max_height((ui.available_height() - 40.).max(100.))
                         .max_width(center)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             ui.set_min_width(1160.);
                             self.browser_table(ui);
                         });
+                    self.recommendations_ui(ui);
                 },
             );
             if preview > 0. {
@@ -2741,6 +2976,124 @@ impl Studio {
                         self.track_preview(ui);
                     },
                 );
+            }
+        });
+    }
+    fn recommendations_ui(&mut self, ui: &mut egui::Ui) {
+        if !self.settings.live_recommendations {
+            return;
+        }
+        let mut playing = Vec::new();
+        let mut loaded = std::collections::BTreeSet::new();
+        let mut context = String::new();
+        for (i, d) in self
+            .snapshot
+            .decks
+            .iter()
+            .take(self.settings.deck_count)
+            .enumerate()
+        {
+            if let Some(track) = &d.track {
+                if let Some(path) = &track.path {
+                    loaded.insert(path.clone());
+                }
+                context.push_str(&format!(
+                    "{i}:{}:{}:{:.2}|",
+                    track.id,
+                    d.playing,
+                    d.bpm * d.rate
+                ));
+                if d.playing {
+                    let mut entry = track
+                        .path
+                        .as_ref()
+                        .and_then(|p| self.catalog.entries.get(p))
+                        .cloned()
+                        .unwrap_or_default();
+                    entry.bpm = Some(d.bpm * d.rate);
+                    playing.push(entry);
+                }
+            }
+        }
+        if context != self.recommendation_context {
+            self.recommendation_results.clear();
+            self.recommendation_selected = 0;
+            self.recommendation_updated = None;
+            self.recommendation_context = context.clone();
+        }
+        if let Some((job_context, rx)) = &self.recommendation_job {
+            if let Ok(results) = rx.try_recv() {
+                if job_context == &context {
+                    self.recommendation_results = results;
+                    self.recommendation_selected = self
+                        .recommendation_selected
+                        .min(self.recommendation_results.len().saturating_sub(1));
+                }
+                self.recommendation_job = None;
+            }
+        }
+        if !playing.is_empty()
+            && self.recommendation_job.is_none()
+            && self
+                .recommendation_updated
+                .is_none_or(|t| t.elapsed() >= Duration::from_secs(3))
+        {
+            let entries: Vec<_> = self.catalog.entries.values().cloned().collect();
+            let (tx, rx) = bounded(1);
+            std::thread::spawn(move || {
+                let _ = tx.send(prospekt_dj::recommendations::rank(
+                    &entries, &playing, &loaded,
+                ));
+            });
+            self.recommendation_job = Some((context, rx));
+            self.recommendation_updated = Some(Instant::now());
+        }
+        let red = Color32::from_rgb(255, 35, 48);
+        let bold = |text: String| {
+            RichText::new(text)
+                .family(egui::FontFamily::Name("Arial Bold".into()))
+                .color(red)
+                .size(16.)
+        };
+        ui.horizontal(|ui| {
+            let count = self.recommendation_results.len();
+            if ui.add_enabled(count > 1, egui::Button::new(bold("◀◀◀".into())).frame(false)).clicked() {
+                self.recommendation_selected = (self.recommendation_selected + count - 1) % count;
+            }
+            let suggestion = self.recommendation_results.get(self.recommendation_selected).cloned();
+            let label = suggestion.as_ref().and_then(|s| self.catalog.entries.get(&s.path)).map(|e| format!("Rekomendacje na żywo: • {} — {}", e.artist, e.title)).unwrap_or_else(|| {
+                if !self.snapshot.decks.iter().any(|d| d.playing) { "Rekomendacje: uruchom utwór na deku".into() }
+                else if self.recommendation_job.is_some() { "Rekomendacje: analiza całej biblioteki…".into() }
+                else { "Rekomendacje: brak dopasowań — uzupełnij BPM, tonację lub gatunek".into() }
+            });
+            let load_width = if suggestion.is_some() { self.settings.deck_count as f32 * 38. + 8. } else { 0. };
+            let response = ui.add_sized([ (ui.available_width()-68.-load_width).max(40.), 30. ], egui::Label::new(bold(label)).truncate().sense(Sense::click()));
+            if let Some(s) = suggestion {
+                if response.clicked() {
+                    if let Some(index) = self.library.iter().position(|p| p == &s.path) {
+                        self.selected = index;
+                        self.scope = Scope::All;
+                        self.search.clear();
+                        self.browser_dirty = true;
+                        self.scroll_selected = true;
+                    }
+                }
+                response.on_hover_text(format!("{}\nKliknij, aby wskazać w bibliotece. Dopasowanie lokalne na podstawie BPM, tonacji i gatunku; brakujące dane nie są zgadywane.", s.reason));
+                for deck in 0..self.settings.deck_count {
+                    let button = egui::Button::new(
+                        RichText::new(letter(deck)).size(14.)
+                            .family(egui::FontFamily::Name("Arial Bold".into()))
+                            .color(ACCENTS[deck]),
+                    ).min_size(Vec2::new(30., 28.)).corner_radius(0);
+                    if ui.add_enabled(!self.loading[deck], button)
+                        .on_hover_text(format!("Załaduj rekomendowany utwór na kanał {}", letter(deck)))
+                        .clicked() {
+                        self.load_manual(deck, s.path.clone());
+                    }
+                }
+            }
+            if ui.add_enabled(count > 1, egui::Button::new(bold("▶▶▶".into())).frame(false)).clicked() {
+                self.recommendation_selected = (self.recommendation_selected + 1) % count;
             }
         });
     }
@@ -2763,6 +3116,19 @@ impl Studio {
                     self.library_data.request(&entry.path, entry.first_seen);
                 }
                 let record = self.library_data.records.get(&entry.path).cloned();
+                let hot_cues = record
+                    .as_ref()
+                    .map(|r| r.hot)
+                    .or_else(|| {
+                        self.snapshot
+                            .decks
+                            .iter()
+                            .find(|d| {
+                                d.track.as_ref().and_then(|t| t.path.as_ref()) == Some(&entry.path)
+                            })
+                            .map(|d| d.hot)
+                    })
+                    .unwrap_or([None; 8]);
                 preview_wave(
                     ui,
                     record.as_ref(),
@@ -2793,8 +3159,15 @@ impl Studio {
                     );
                 }
                 response.context_menu(|ui| self.art_menu(ui, &entry));
-                ui.add(egui::Label::new(RichText::new(&entry.title).strong().size(13.)).truncate())
-                    .on_hover_text(&entry.title);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(&entry.title)
+                            .family(egui::FontFamily::Name("Arial Bold".into()))
+                            .size(13.),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(&entry.title);
                 ui.add(egui::Label::new(&entry.artist).truncate())
                     .on_hover_text(&entry.artist);
                 ui.label(
@@ -2846,11 +3219,56 @@ impl Studio {
                         }
                     });
                     ui.label("Komentarz");
-                    ui.add(
-                        egui::TextEdit::multiline(&mut user.comment)
-                            .desired_rows(2)
-                            .desired_width(170.),
-                    );
+                    let output = egui::TextEdit::multiline(&mut user.comment)
+                        .id_salt(("track-comment", &entry.path))
+                        .desired_rows(2)
+                        .desired_width(170.)
+                        .show(ui);
+                    let cursor = output
+                        .cursor_range
+                        .map(|range| range.as_sorted_char_range())
+                        .or_else(|| {
+                            output.state.cursor.char_range().map(|range| {
+                                let [start, end] = range.sorted();
+                                start.index..end.index
+                            })
+                        })
+                        .unwrap_or_else(|| {
+                            let end = user.comment.chars().count();
+                            end..end
+                        });
+                    ui.push_id(("comment-emoji", &entry.path), |ui| {
+                        ui.menu_button("☺ Emoji", |ui| {
+                            egui::Grid::new("comment-emoji-grid")
+                                .num_columns(5)
+                                .show(ui, |ui| {
+                                    for (i, emoji) in
+                                        prospekt_dj::music_view::EMOJI.iter().enumerate()
+                                    {
+                                        if self.emoji.button(ui, emoji).clicked() {
+                                            let cursor = prospekt_dj::music_view::insert_unicode(
+                                                &mut user.comment,
+                                                cursor.clone(),
+                                                emoji,
+                                            );
+                                            let mut state = output.state.clone();
+                                            state.cursor.set_char_range(Some(
+                                                egui::text::CCursorRange::one(
+                                                    egui::text::CCursor::new(cursor),
+                                                ),
+                                            ));
+                                            state.store(ui.ctx(), output.response.id);
+                                            output.response.request_focus();
+                                            ui.close_menu();
+                                        }
+                                        if i % 5 == 4 {
+                                            ui.end_row();
+                                        }
+                                    }
+                                });
+                        });
+                    });
+                    self.emoji.preview(ui, &user.comment, 170., 3);
                     let date = |t: i64| {
                         if t <= 0 {
                             return "Brak danych".into();
@@ -2933,6 +3351,42 @@ impl Studio {
                         }
                     }
                 });
+                ui.separator();
+                ui.label(
+                    RichText::new("PUNKTY CUE")
+                        .family(egui::FontFamily::Name("Arial Bold".into()))
+                        .size(11.),
+                );
+                egui::Grid::new(("track-info-cues", &entry.path))
+                    .num_columns(2)
+                    .spacing(Vec2::new(8., 4.))
+                    .show(ui, |ui| {
+                        for (slot, position) in hot_cues.iter().enumerate() {
+                            let color = cue_color(slot);
+                            ui.label(
+                                RichText::new(format!("CUE {}", slot + 1))
+                                    .family(egui::FontFamily::Name("Arial Bold".into()))
+                                    .size(11.)
+                                    .color(color),
+                            );
+                            egui::Frame::new()
+                                .fill(Color32::from_gray(26))
+                                .stroke(Stroke::new(1_f32, color))
+                                .corner_radius(0)
+                                .inner_margin(egui::Margin::symmetric(6, 3))
+                                .show(ui, |ui| {
+                                    ui.set_min_width(76.);
+                                    let text = position
+                                        .filter(|t| t.is_finite() && *t >= 0.)
+                                        .map(time)
+                                        .unwrap_or_else(|| "—".into());
+                                    ui.label(
+                                        RichText::new(text).monospace().size(12.).color(color),
+                                    );
+                                });
+                            ui.end_row();
+                        }
+                    });
             });
     }
     fn browser_sidebar(&mut self, ui: &mut egui::Ui) {
@@ -2958,10 +3412,22 @@ impl Studio {
                     .len(),
                 _ => self.catalog.entries.values().filter(|e| e.missing).count(),
             };
-            if ui
-                .selectable_value(&mut self.scope, scope, format!("{label}  {count}"))
-                .changed()
-            {
+            let response = if matches!(scope, Scope::Loaded | Scope::Favorites) {
+                tree_choice(
+                    ui,
+                    &mut self.emoji,
+                    &mut self.scope,
+                    scope.clone(),
+                    if scope == Scope::Favorites {
+                        format!("ULUBIONE  {count}")
+                    } else {
+                        format!("NA DEKACH  {count}")
+                    },
+                )
+            } else {
+                ui.selectable_value(&mut self.scope, scope, format!("{label}  {count}"))
+            };
+            if response.changed() {
                 self.browser_dirty = true;
             }
         }
@@ -2992,9 +3458,9 @@ impl Studio {
                 }
             }
         });
-        ui.label(RichText::new(tr("SKRZYNKI / CRATES")).small().weak());
+        ui.label(RichText::new(tr("BANGER BOX")).small().weak());
         self.crate_nodes(ui, None, 0);
-        if ui.button(format!("+ {}", tr("Nowa skrzynka"))).clicked() {
+        if ui.button(format!("+ {}", tr("Nowy BANGER BOX"))).clicked() {
             self.crate_editor = Some(CrateEditor {
                 id: None,
                 parent: None,
@@ -3058,7 +3524,7 @@ impl Studio {
                     self.browser_dirty = true;
                 }
                 response.context_menu(|ui| {
-                    if ui.button(tr("Nowa podskrzynka")).clicked() {
+                    if ui.button(tr("Nowy zagnieżdżony BANGER BOX")).clicked() {
                         self.crate_editor = Some(CrateEditor {
                             id: None,
                             parent: Some(node.id),
@@ -3088,7 +3554,7 @@ impl Studio {
                             ui.close_menu();
                         }
                     }
-                    if ui.button(tr("Usuń skrzynkę")).clicked() {
+                    if ui.button(tr("Usuń BANGER BOX")).clicked() {
                         self.catalog.delete_crate(node.id);
                         if self.scope == Scope::Crate(node.id) {
                             self.scope = Scope::All;
@@ -3172,7 +3638,7 @@ impl Studio {
         };
         let mut open = true;
         let mut save = false;
-        egui::Window::new(tr("Nazwa skrzynki"))
+        egui::Window::new(tr("Nazwa BANGER BOX"))
             .id(egui::Id::new("crate-editor"))
             .default_pos(egui::pos2(
                 ((ctx.screen_rect().width() - 350.) * 0.5).max(0.),
@@ -3324,20 +3790,46 @@ impl Studio {
                     Vec2::splat(72.),
                 );
                 let response = ui.interact(rect, ui.id().with(("art", index)), Sense::click());
-                ui.painter().rect_filled(rect, 1., Color32::from_gray(20));
+                let animated =
+                    self.settings.cover_scroll_animation && !self.settings.reduced_motion;
+                let opacity = if animated {
+                    let center = n as f32 * step + 36.;
+                    let left = if viewport.left() > 0.5 {
+                        ((center - viewport.left()) / 56.).clamp(0., 1.)
+                    } else {
+                        1.
+                    };
+                    let right = if viewport.right() < total - 0.5 {
+                        ((viewport.right() - center) / 56.).clamp(0., 1.)
+                    } else {
+                        1.
+                    };
+                    let t = left.min(right);
+                    let target = t * t * (3. - 2. * t);
+                    ui.ctx().animate_value_with_time(
+                        ui.id().with(("cover-scroll-opacity", &path)),
+                        target,
+                        0.14,
+                    )
+                } else {
+                    1.
+                };
+                let mut painter = ui.painter().clone();
+                painter.multiply_opacity(opacity);
+                painter.rect_filled(rect, 1., Color32::from_gray(20));
                 if let Some(art) = self.art_textures.get_mut(&key) {
                     art.used = self.art_tick;
                     let size = art.texture.size_vec2();
                     let fitted = size * (68. / size.x.max(size.y));
                     let target = egui::Rect::from_center_size(rect.center(), fitted);
-                    ui.painter().image(
+                    painter.image(
                         art.texture.id(),
                         target,
                         egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
                         Color32::WHITE,
                     );
                 } else {
-                    ui.painter().text(
+                    painter.text(
                         rect.center(),
                         egui::Align2::CENTER_CENTER,
                         "♫",
@@ -3346,7 +3838,7 @@ impl Studio {
                     );
                 }
                 if index == self.selected {
-                    ui.painter().rect_stroke(
+                    painter.rect_stroke(
                         rect,
                         1.,
                         Stroke::new(2_f32, ACCENTS[0]),
@@ -3389,6 +3881,8 @@ impl Studio {
         let size = if width > 950. { 68. } else { 0. };
         let title = (width
             - 30.
+            - 26.
+            - 24.
             - 34.
             - preview
             - artist
@@ -3404,6 +3898,8 @@ impl Studio {
             .max(130.);
         let columns = [
             (30., "", None),
+            (24., "", None),
+            (26., "", None),
             (34., "#", None),
             (preview, "PREVIEW", None),
             (title, "TYTUŁ", Some(Sort::Title)),
@@ -3439,7 +3935,12 @@ impl Studio {
                 if ui
                     .add_sized(
                         [w, 24.],
-                        egui::Button::new(RichText::new(text).small().strong()).frame(false),
+                        egui::Button::new(
+                            RichText::new(text)
+                                .small()
+                                .family(egui::FontFamily::Name("Arial Bold".into())),
+                        )
+                        .frame(false),
                     )
                     .clicked()
                 {
@@ -3457,7 +3958,7 @@ impl Studio {
         });
         let rows = self.visible();
         let row_height = 23.;
-        let height = (ui.available_height() - 39.).max(90.);
+        let height = (ui.available_height() - 70.).max(90.);
         let mut scroll = egui::ScrollArea::vertical()
             .id_salt("library-table")
             .auto_shrink([false, false])
@@ -3517,7 +4018,7 @@ impl Studio {
                         self.cover_reveal = true;
                     }
                     let in_preview = response.interact_pointer_pos().is_some_and(|p| {
-                        p.x >= rect.left() + 64. && p.x < rect.left() + 64. + preview
+                        p.x >= rect.left() + 114. && p.x < rect.left() + 114. + preview
                     });
                     if response.double_clicked() && !entry.missing && !in_preview {
                         self.load_manual(self.focused, path.clone());
@@ -3549,6 +4050,31 @@ impl Studio {
                                 }
                                 self.browser_dirty = true;
                             }
+                            let (heart_rect, heart_response) =
+                                ui.allocate_exact_size(Vec2::new(24., row_height), Sense::hover());
+                            if self.settings.favorites.contains(&path) {
+                                self.emoji.paint(ui, heart_rect, "❤️", Color32::WHITE);
+                                heart_response.on_hover_text("Ulubiony utwór");
+                            }
+                            let played = self.snapshot.session_played.contains(&path);
+                            let (status_rect, status_response) =
+                                ui.allocate_exact_size(Vec2::new(26., row_height), Sense::hover());
+                            self.emoji.paint(ui, status_rect, "🎶", Color32::WHITE);
+                            if played && self.settings.show_emojis {
+                                let from = status_rect.left_bottom() + egui::vec2(4., -3.);
+                                let to = status_rect.right_top() + egui::vec2(-4., 3.);
+                                ui.painter()
+                                    .line_segment([from, to], Stroke::new(5_f32, Color32::BLACK));
+                                ui.painter().line_segment(
+                                    [from, to],
+                                    Stroke::new(3_f32, Color32::from_rgb(255, 35, 48)),
+                                );
+                            }
+                            status_response.on_hover_text(if played {
+                                "Utwór grany w bieżącej sesji"
+                            } else {
+                                "Utwór jeszcze niegrany w bieżącej sesji"
+                            });
                             cell(ui, 34., &format!("{:02}", visible_index + 1), Color32::GRAY);
                             if preview > 0. {
                                 preview_wave(
@@ -3677,7 +4203,7 @@ impl Studio {
                                     ui.close_menu();
                                 }
                             }
-                            ui.menu_button("Dodaj / usuń ze skrzynki", |ui| {
+                            ui.menu_button(tr("Dodaj / usuń z BANGER BOX"), |ui| {
                                 for c in &mut self.catalog.crates {
                                     let mut in_crate = c.tracks.contains(&path);
                                     if ui.checkbox(&mut in_crate, &c.name).changed() {
@@ -3691,7 +4217,7 @@ impl Studio {
                                     }
                                 }
                                 if self.catalog.crates.is_empty() {
-                                    ui.label("Utwórz skrzynkę po lewej stronie.");
+                                    ui.label(tr("Utwórz BANGER BOX po lewej stronie."));
                                 }
                             });
                             if ui.button(tr("Pokaż folder pliku")).clicked() {
@@ -3735,9 +4261,9 @@ impl Studio {
         if rows.is_empty() {
             ui.label(
                 RichText::new(if self.search.is_empty() {
-                    "Ten widok jest pusty. Dodaj pliki lub wybierz inną skrzynkę."
+                    tr("Ten widok jest pusty. Dodaj pliki lub wybierz inny BANGER BOX.")
                 } else {
-                    "Brak wyników. Wyszukiwanie obejmuje wszystkie słowa zapytania."
+                    "Brak wyników. Wyszukiwanie obejmuje wszystkie słowa zapytania.".into()
                 })
                 .weak(),
             );
@@ -3902,8 +4428,37 @@ impl Studio {
             }
         }
     }
+    fn microphone_settings_ui(&mut self, ui: &mut egui::Ui) {
+        ui.collapsing("Mikrofon", |ui| {
+            if ui.checkbox(&mut self.settings.mic_enabled, "Włącz mikrofon do miksu MASTER i nagrania").changed() {
+                self.mic_status.clear();
+            }
+            if ui.button("Odśwież wejścia mikrofonowe").clicked() {
+                match prospekt_dj::microphone::input_names() {
+                    Ok(names) => self.mic_names = names,
+                    Err(error) => self.mic_status = format!("Nie można odczytać wejść: {error:#}"),
+                }
+            }
+            let previous = self.settings.mic_device.clone();
+            egui::ComboBox::from_id_salt("microphone-input")
+                .selected_text(if previous.is_empty() { "Domyślny mikrofon systemowy" } else { &previous })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.settings.mic_device, String::new(), "Domyślny mikrofon systemowy");
+                    for name in &self.mic_names { ui.selectable_value(&mut self.settings.mic_device, name.clone(), name); }
+                });
+            if previous != self.settings.mic_device {
+                self.microphone = None;
+                self.send(Command::Microphone(None));
+                self.mic_status.clear();
+            }
+            if !self.mic_status.is_empty() { ui.label(&self.mic_status); }
+            ui.label("Wejście systemowe, kanał 1 → oba kanały MASTER i nagranie. Mikrofon nie trafia do PFL. Używaj słuchawek, aby uniknąć sprzężenia.");
+            if self.runtime.is_none() { ui.label("Uruchom wyjście audio, aby korzystać z mikrofonu."); }
+        });
+    }
     fn audio_settings_ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Audio · WASAPI / ASIO");
+        ui.heading(format!("Audio · {}", self.settings.audio_backend.label()));
+        self.microphone_settings_ui(ui);
         let previous = self.settings.audio_backend;
         egui::ComboBox::from_id_salt("audio-backend")
             .selected_text(self.settings.audio_backend.label())
@@ -3973,6 +4528,9 @@ impl Studio {
                         );
                     }
                 });
+            if self.settings.audio_cue_pair == Some(self.settings.audio_master_pair) {
+                self.settings.audio_cue_pair = None;
+            }
             egui::ComboBox::from_id_salt("asio-cue-pair")
                 .selected_text(
                     self.settings
@@ -3994,7 +4552,7 @@ impl Studio {
                 });
             ui.label("ASIO otwiera jeden sterownik; MASTER i PFL mogą używać różnych par jego kanałów. Niedostępna para wywoła czytelny błąd.");
         } else {
-            ui.label("Realtek: wybierz WASAPI, domyślne wyjście lub Speakers / Realtek Audio i bufor sterownika. Włącz głośniki w Ustawieniach dźwięku Windows.");
+            ui.label(if cfg!(target_os="windows"){ "Realtek: wybierz WASAPI, domyślne wyjście lub Speakers / Realtek Audio i bufor sterownika. Włącz głośniki w Ustawieniach dźwięku Windows." }else{"Wybierz domyślne wyjście systemowe i bufor sterownika. ASIO jest dostępne w wersji Windows."});
             egui::ComboBox::from_id_salt("cue-output")
                 .selected_text(if self.settings.cue_device.is_empty() {
                     "PFL: wyłączony"
@@ -4055,6 +4613,160 @@ impl Studio {
             );
         });
     }
+    fn eject_confirmation_ui(&mut self, ctx: &egui::Context) {
+        let Some((deck, track_id, token)) = self.eject_pending.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut confirm = false;
+        let mut cancel = ctx.input(|input| input.key_pressed(egui::Key::Escape));
+        egui::Window::new("Wyrzuć utwór z deku")
+            .id(egui::Id::new("confirm-eject-track"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "Czy na pewno chcesz wyrzucić utwór z deku {}?",
+                    letter(deck)
+                ));
+                if let Some(track) = &self.snapshot.decks[deck].track {
+                    ui.label(&track.title);
+                }
+                if self.snapshot.decks[deck].playing {
+                    ui.colored_label(
+                        Color32::RED,
+                        "Utwór jest odtwarzany. Potwierdzenie zatrzyma ten dek.",
+                    );
+                }
+                ui.label("Plik, punkty CUE i wpis w bibliotece zostaną zachowane.");
+                ui.horizontal(|ui| {
+                    if ui.button("Tak, wyrzuć").clicked() {
+                        confirm = true;
+                    }
+                    if ui.button("Anuluj").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if confirm {
+            let unchanged = self.deck_tokens[deck] == token
+                && !self.loading[deck]
+                && self.snapshot.decks[deck]
+                    .track
+                    .as_ref()
+                    .is_some_and(|track| track.id == track_id);
+            if unchanged {
+                self.stop_auto();
+                self.deck_tokens[deck] += 1;
+                self.loading[deck] = false;
+                self.covers[deck] = None;
+                self.bend_slider[deck] = 0.;
+                self.bend_buttons[deck] = 0.;
+                self.bend_keys[deck] = 0.;
+                self.send(Command::Deck(deck, DeckControl::Unload));
+                self.status = format!("Wyładowano utwór z deku {}", letter(deck));
+            } else {
+                self.status = "Utwór na deku zmienił się — ponów polecenie wyrzucenia.".into();
+            }
+        }
+        if confirm || cancel || !open {
+            self.eject_pending = None;
+        }
+    }
+    fn connect_detected_controller(&mut self, name: &str, profile: usize) {
+        let Some(index) = self.midi_names.iter().position(|n| n == name) else {
+            self.detected_status = "Urządzenie zostało odłączone.".into();
+            return;
+        };
+        let Some(mapping) = self
+            .settings
+            .controller_profiles
+            .get(profile)
+            .filter(|p| !p.mappings.is_empty())
+            .cloned()
+        else {
+            return;
+        };
+        // Drop the old connection before opening the same Windows MIDI port again.
+        self.midi_connection = None;
+        while self.midi_rx.try_recv().is_ok() {}
+        match midi::connect_named(name, self.midi_tx.clone()) {
+            Ok(connection) => {
+                self.midi_connection = Some(connection);
+                self.midi_selected = index;
+                self.midi_reconnect_name = Some(name.to_owned());
+                self.settings.midi = mapping.mappings;
+                self.settings.controller_profile = Some(profile);
+                self.settings.controller_profile_source = mapping.source;
+                self.detected_status = format!(
+                    "Połączono. Zastosowano mapowanie: {} {}",
+                    mapping.manufacturer, mapping.model
+                );
+                self.status = self.detected_status.clone();
+            }
+            Err(error) => {
+                self.detected_status = format!("Nie można otworzyć urządzenia MIDI: {error:#}")
+            }
+        }
+    }
+    fn detected_controller_ui(&mut self, ctx: &egui::Context) {
+        let Some(name) = self.controller_notices.front().cloned() else {
+            return;
+        };
+        let candidates = midi::matching_profiles(&name, &self.settings.controller_profiles);
+        if self.detected_status.is_empty() {
+            self.detected_profile = candidates.first().copied();
+            if candidates.len() == 1 && self.midi_connection.is_none() {
+                self.connect_detected_controller(&name, candidates[0]);
+            } else {
+                self.detected_status = if candidates.is_empty() {
+                    "Nie znaleziono jednoznacznego modelu. Wybierz profil ręcznie lub użyj MIDI Learn w ustawieniach.".into()
+                } else if candidates.len() > 1 {
+                    "Znaleziono kilka wariantów mapowania. Wybierz właściwy profil.".into()
+                } else {
+                    "Inny kontroler jest już połączony. Możesz ręcznie przełączyć urządzenie."
+                        .into()
+                };
+            }
+        }
+        let mut open = true;
+        let mut close = false;
+        egui::Window::new("ODNALEZIONO URZĄDZENIE — KONTROLER")
+            .id(egui::Id::new("detected-controller"))
+            .open(&mut open).collapsible(false).default_width(520.)
+            .show(ctx, |ui| {
+                ui.label(RichText::new(&name).family(egui::FontFamily::Name("Arial Bold".into())).size(16.));
+                ui.label("Nazwa zgłoszona przez sterownik MIDI. Dopasowanie korzysta z lokalnej bazy profili.");
+                egui::ComboBox::from_id_salt("detected-controller-profile")
+                    .selected_text(self.detected_profile.and_then(|i| self.settings.controller_profiles.get(i)).map(|p| p.label()).unwrap_or_else(|| "Wybierz mapowanie".into()))
+                    .show_ui(ui, |ui| {
+                        for (i, profile) in self.settings.controller_profiles.iter().enumerate().filter(|(_, p)| !p.mappings.is_empty()) {
+                            let recommended = if candidates.contains(&i) { "★ " } else { "" };
+                            ui.selectable_value(&mut self.detected_profile, Some(i), format!("{recommended}{}", profile.label()));
+                        }
+                    });
+                ui.label(&self.detected_status);
+                if !self.midi_names.contains(&name) { ui.colored_label(Color32::RED, "Urządzenie jest obecnie odłączone."); }
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(self.detected_profile.is_some() && self.midi_names.contains(&name), egui::Button::new("Połącz i zastosuj mapowanie")).clicked() {
+                        if let Some(profile) = self.detected_profile { self.connect_detected_controller(&name, profile); }
+                    }
+                    if ui.button("Ustawienia MIDI").clicked() {
+                        self.settings_open = true;
+                        self.settings_tab = 1;
+                        close = true;
+                    }
+                    if ui.button("Zamknij").clicked() { close = true; }
+                });
+            });
+        if !open || close {
+            self.controller_notices.pop_front();
+            self.detected_status.clear();
+            self.detected_profile = None;
+        }
+    }
     fn settings_ui(&mut self, ctx: &egui::Context) {
         let mut open = self.settings_open;
         egui::Window::new(tr("Ustawienia studia")).id(egui::Id::new("studio-settings")).default_pos(egui::pos2(((ctx.screen_rect().width()-840.)/2.).max(0.),80.)).open(&mut open).default_width(840.).resizable(true).show(ctx,|ui|{ egui::ScrollArea::vertical().max_height((ctx.screen_rect().height()-160.).max(300.)).show(ui,|ui|{
@@ -4074,6 +4786,7 @@ impl Studio {
                     ui.heading("Wygląd i wydajność");
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
                     ui.checkbox(&mut self.settings.reduced_motion,"Ogranicz animacje");
+                    ui.add_enabled(!self.settings.reduced_motion, egui::Checkbox::new(&mut self.settings.blink_paused_play,"Miganie PLAY co pół sekundy, gdy utwór jest zatrzymany"));
                     ui.checkbox(&mut self.settings.show_statistics,"Statystyki systemowe");
                     ui.add(egui::Slider::new(&mut self.settings.refresh_hz,10..=120).text("Limit odświeżania / Hz"));
                     let mut zoom=self.settings.ui_scale;
@@ -4121,7 +4834,26 @@ impl Studio {
                     if self.settings.language != previous {i18n::set_language(&self.settings.language);}
                     ui.separator();ui.heading(tr("Wygląd"));
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
+                    ui.label("Kolor wnętrza jogów");
+                    egui::ComboBox::from_id_salt("jog-background")
+                        .selected_text(if self.settings.white_jog { "Białe tło / czarny tekst" } else { "Czarne tło / jasny tekst" })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.settings.white_jog, false, "Czarne tło / jasny tekst");
+                            ui.selectable_value(&mut self.settings.white_jog, true, "Białe tło / czarny tekst");
+                        });
+                    ui.label("Nazwa biblioteki utworów");
+                    egui::ComboBox::from_id_salt("library-heading-name")
+                        .selected_text(if self.settings.banger_site_name { "BANGER SITE" } else { "Kolekcja" })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.settings.banger_site_name, true, "BANGER SITE (z ikoną ognia)");
+                            ui.selectable_value(&mut self.settings.banger_site_name, false, "Kolekcja");
+                        }).response.on_hover_text("Nazwa nagłówka biblioteki utworów");
+                    if ui.checkbox(&mut self.settings.show_emojis,"Pokaż emotikony").changed() {
+                        self.emoji.hidden = !self.settings.show_emojis;
+                    }
+                    ui.label("Ukrywanie emotikon nie usuwa ich z nazw ani komentarzy. Wybór jest zapamiętywany.");
                     ui.checkbox(&mut self.settings.cover_strip,tr("Pasek okładek"));
+                    ui.add_enabled(!self.settings.reduced_motion, egui::Checkbox::new(&mut self.settings.cover_scroll_animation,"Płynne zanikanie okładek podczas przewijania"));
                     ui.checkbox(&mut self.settings.track_preview,"Track info sidebar (wide windows)");
                     ui.checkbox(&mut self.settings.preview_column,"PREVIEW waveform column");
                     if ui.add(egui::Slider::new(&mut self.settings.history_threshold,1.0..=300.).text("MASTER playback threshold / s")).changed(){self.send(Command::HistoryThreshold(self.settings.history_threshold));}
@@ -4714,7 +5446,10 @@ impl Studio {
             toggle_fullscreen(ctx);
         }
         if self.settings_open
+            || !self.controller_notices.is_empty()
+            || self.eject_pending.is_some()
             || ctx.wants_keyboard_input()
+            || ctx.memory(|memory| memory.any_popup_open())
             || ctx.input(|input| {
                 input.modifiers.ctrl || input.modifiers.alt || input.modifiers.command
             })
@@ -4864,7 +5599,9 @@ impl Studio {
 }
 impl eframe::App for Studio {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.emoji.hidden = !self.settings.show_emojis;
         self.bend_buttons = [0.; 4];
+        self.reverse_requested = [false; 4];
         self.crate_dialog(ctx);
         self.poll(ctx);
         self.keyboard(ctx);
@@ -4910,11 +5647,7 @@ impl eframe::App for Studio {
             .default_height(if self.settings.deck_count == 4 {
                 640.
             } else if self.settings.show_effects {
-                match self.dock_tab {
-                    0 => 620.,
-                    1 => 440.,
-                    _ => 500.,
-                }
+                620.
             } else {
                 380.
             })
@@ -4948,6 +5681,18 @@ impl eframe::App for Studio {
         }
         if self.settings_open {
             self.settings_ui(ctx);
+        }
+        self.detected_controller_ui(ctx);
+        self.eject_confirmation_ui(ctx);
+        for i in 0..4 {
+            let held = self.reverse_requested[i] && focused && self.eject_pending.is_none();
+            if held != self.reverse_sent[i] {
+                if held {
+                    self.stop_auto();
+                }
+                self.send(Command::Deck(i, DeckControl::Reverse(held)));
+                self.reverse_sent[i] = held;
+            }
         }
         self.apply_bends(ctx);
         self.confirm_close(ctx);
@@ -5012,14 +5757,52 @@ fn keyboard_help(ui: &mut egui::Ui) {
 fn actions() -> Vec<String> {
     midi::actions()
 }
+fn jog_action_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    enabled: bool,
+    active: bool,
+) -> egui::Response {
+    ui.add_enabled_ui(enabled, |ui| {
+        let (rect, response) = ui.allocate_exact_size(Vec2::splat(22.), Sense::click());
+        let shade = if response.is_pointer_button_down_on() || active {
+            60
+        } else if response.hovered() {
+            44
+        } else {
+            26
+        };
+        ui.painter()
+            .rect_filled(rect, 0., Color32::from_gray(shade));
+        ui.painter().rect_stroke(
+            rect,
+            0.,
+            Stroke::new(1_f32, Color32::from_gray(90)),
+            egui::StrokeKind::Inside,
+        );
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            label,
+            FontId::new(12., egui::FontFamily::Name("Arial Bold".into())),
+            Color32::from_gray(225),
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+        });
+        response
+    })
+    .inner
+}
 fn transport_button(
     ui: &mut egui::Ui,
     label: &str,
     active: bool,
     color: Color32,
     reduced: bool,
+    width: f32,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(48., 28.), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 28.), Sense::click());
     let hover = if reduced {
         if response.hovered() {
             1.
@@ -5044,15 +5827,15 @@ fn transport_button(
             .animate_bool_with_time(response.id.with("transport-state"), active, 0.12)
     };
     let p = ui.painter();
-    p.rect_filled(rect, 2., Color32::BLACK);
+    p.rect_filled(rect, 0., Color32::BLACK);
     p.rect_filled(
         rect,
-        2.,
+        0.,
         color.gamma_multiply(0.08 + 0.25 * selected + 0.12 * hover),
     );
     p.rect_stroke(
         rect.shrink(0.5),
-        2.,
+        0.,
         Stroke::new(
             if response.is_pointer_button_down_on() {
                 2_f32
@@ -5130,6 +5913,22 @@ fn waveform(
     let (response, painter) =
         ui.allocate_painter(Vec2::new(ui.available_width(), height), Sense::click());
     let rect = response.rect;
+    let wheel_zoom = span.filter(|_| response.hovered()).and_then(|seconds| {
+        let delta = ui.input(|input| input.raw_scroll_delta.y);
+        if delta == 0. || !delta.is_finite() {
+            return None;
+        }
+        ui.input_mut(|input| {
+            input.raw_scroll_delta.y = 0.;
+            input.smooth_scroll_delta.y = 0.;
+        });
+        Some((seconds * (-f64::from(delta.clamp(-240., 240.)) / 300.).exp()).clamp(2., 16.))
+    });
+    if span.is_some() {
+        response
+            .clone()
+            .on_hover_text("Kółko myszy: przybliż / oddal waveform");
+    }
     let painter = painter.with_clip_rect(rect);
     painter.rect_filled(rect, 3., ui.visuals().extreme_bg_color);
     painter.line_segment(
@@ -5144,7 +5943,7 @@ fn waveform(
             FontId::proportional(11.),
             ui.visuals().weak_text_color(),
         );
-        return None;
+        return wheel_zoom.map(WaveAction::Zoom);
     };
     let duration = track.duration();
     let range = span.unwrap_or(duration).max(0.001);
@@ -5259,27 +6058,33 @@ fn waveform(
     for &(n, _, x) in &markers {
         let color = cue_color(n);
         painter.line_segment(
-            [egui::pos2(x, rect.top() + 7.), egui::pos2(x, rect.bottom())],
-            Stroke::new(1_f32, color.gamma_multiply(0.65)),
+            [
+                egui::pos2(x, rect.top() + 14.),
+                egui::pos2(x, rect.bottom()),
+            ],
+            Stroke::new(2_f32, color),
         );
         painter.add(egui::Shape::convex_polygon(
             vec![
-                egui::pos2(x - 4., rect.top()),
-                egui::pos2(x + 4., rect.top()),
-                egui::pos2(x, rect.top() + 7.),
+                egui::pos2(x - 9., rect.top()),
+                egui::pos2(x + 9., rect.top()),
+                egui::pos2(x, rect.top() + 14.),
             ],
             color,
-            Stroke::NONE,
+            Stroke::new(1.5_f32, Color32::BLACK),
         ));
         if height > 25. {
             painter.text(
-                egui::pos2(x + 4., rect.top() + 8.),
+                egui::pos2(x + 9., rect.top() + 15.),
                 egui::Align2::LEFT_TOP,
                 (n + 1).to_string(),
-                FontId::monospace(9.),
+                FontId::monospace(12.),
                 color,
             );
         }
+    }
+    if let Some(seconds) = wheel_zoom {
+        return Some(WaveAction::Zoom(seconds));
     }
     let hovered = ui
         .input(|v| v.pointer.hover_pos())
@@ -5288,7 +6093,7 @@ fn waveform(
         .map(|p| {
             markers
                 .iter()
-                .filter(|(_, _, x)| (*x - p.x).abs() <= 6.)
+                .filter(|(_, _, x)| (*x - p.x).abs() <= 11.)
                 .collect()
         })
         .unwrap_or_default();

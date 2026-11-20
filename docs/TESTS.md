@@ -1,3 +1,13 @@
+# Prospekt DJ pre-beta 0.0.1 — current validation
+
+- **102 local tests passed**, with opt-in CPAL/ALSA-null and FFmpeg tests enabled. Strict Clippy and formatting passed. This includes Windows startup-theme regression, audio recovery/routing and PCM formats; Unicode emoji insertion; whole-library recommendation ranking; session markers surviving audio restart; MIDI name matching/ambiguity; microphone gain/mute/PFL isolation/resampling/recording; confirmed-eject engine behavior; held Slip Reverse, forward catch-up and loops.
+- The local Linux executable used for current screenshots is an optimized Release build. Its exact hash, capture times and image hashes are recorded in [build-info.json](screenshots/pre-beta-0.0.1/build-info.json). Downloaded CI executables have separate hashes in the release SHA256SUMS manifest.
+- Current native 2/4-deck views, black/white jogs, bold readouts and needle, REC/MIC controls, favorite/loaded filters, heart/session indicators and eject confirmation/cancel were inspected in Xvfb. New MIDI and microphone hardware behavior is not physically certified.
+- CI builds/tests native Windows with the pinned GPLv3 ASIO SDK and native Linux. It verifies DEB installation and AppImage/Flatpak startup before publication. The earlier ASIO build dry-run also passed on both platforms.
+- Known limitations and import scope are retained in README and the implementation status documents. Historical results below are preserved and do not replace current validation.
+
+---
+
 # Prospekt DJ 2.4 PRE-BETA — current validation
 
 - **74 local tests passed**, with `PROSPEKT_TEST_AUDIO=1`, an ALSA-null device and `PROSPEKT_TEST_FFMPEG=1`. Format checks, strict Clippy and optimized Linux Release build passed.

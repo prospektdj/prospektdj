@@ -1,14 +1,6 @@
 name: Build and publish PRE-BETA packages
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release.yml'
-      - 'scripts/package_release.py'
-      - 'scripts/package_deb.py'
-      - 'scripts/package_appimage.sh'
-      - 'scripts/package_flatpak.sh'
 permissions:
   contents: read
 concurrency:
@@ -115,23 +107,25 @@ jobs:
           import re
           version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
           assets = sorted(Path('release-assets').glob('*'))
-          assert len(assets) == 5, f'Expected five PRE-BETA packages, got {len(assets)}'
+          assert len(assets) == 6, f'Expected five packages plus ASIO source archive, got {len(assets)}'
           import shutil
-          screenshots = sorted(Path('docs/next-update/screenshots').glob('v24-*.png'))
-          assert len(screenshots) == 6, 'Expected six current 2.4 PRE-BETA screenshots'
+          screenshots = sorted(Path('docs/screenshots/pre-beta-0.0.1').glob('*.png'))
+          assert len(screenshots) == 4, 'Expected four current pre-beta 0.0.1 screenshots'
           for screenshot in screenshots:
               shutil.copy2(screenshot, Path('release-assets') / screenshot.name)
-          shutil.copy2('docs/next-update/screenshots/build-info.json', 'release-assets/v24-screenshot-build-info.json')
+          shutil.copy2('docs/screenshots/pre-beta-0.0.1/build-info.json', 'release-assets/screenshot-build-info.json')
+          import subprocess
+          subprocess.run(['git', 'archive', '--format=zip', f'--prefix=Prospekt-DJ-{version}-source/', 'HEAD', '-o', f'release-assets/Prospekt-DJ-{version}-source.zip'], check=True)
           assets = sorted(Path('release-assets').glob('*'))
           Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
-          notes = Path('docs/RELEASE-2.4.md').read_text().replace('{{TAG}}', f'rust-v{version}').replace('{{VERSION}}', version)
+          notes = Path('docs/RELEASE-0.0.1.md').read_text().replace('{{TAG}}', f'v{version}').replace('{{VERSION}}', version)
           Path('release-notes.md').write_text(notes)
           with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
-              file.write(f'RELEASE_TAG=rust-v{version}\nRELEASE_VERSION={version}\n')
+              file.write(f'RELEASE_TAG=v{version}\nRELEASE_VERSION={version}\n')
           PY
       - name: Publish release with all packages
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ Rust $RELEASE_VERSION — PRE-BETA" --notes-file release-notes.md
+          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ — pre-beta 0.0.1" --notes-file release-notes.md
