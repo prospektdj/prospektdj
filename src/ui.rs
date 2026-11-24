@@ -3105,8 +3105,8 @@ impl Studio {
             });
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.;
-                for n in 0..4 {
-                    let filled = d.loop_slots[n].is_some();
+                for (n, slot) in d.loop_slots.iter().enumerate() {
+                    let filled = slot.is_some();
                     let response = ui
                         .add_sized(
                             [22., 16.],
