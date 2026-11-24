@@ -115,6 +115,8 @@ fn database_failure_does_not_disable_audio_engine_or_overwrite_future_database()
 }
 #[test]
 fn windows_light_os_event_cannot_replace_the_saved_dark_app_theme() {
+    // The original skin must keep the original dark visuals exactly.
+    theme::set_skin(theme::Skin::Classic);
     let ctx = egui::Context::default();
     theme::apply(&ctx, false);
     let _ = ctx.run(

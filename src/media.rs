@@ -17,6 +17,7 @@ use symphonia::core::{
 
 pub type Frame = [f32; 2];
 pub const MAX_FRAMES: usize = 64 * 1024 * 1024;
+pub const MAX_FILE_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WaveBin {
@@ -34,6 +35,8 @@ pub struct Track {
     pub frames: Vec<Frame>,
     pub sample_rate: u32,
     pub bpm: f64,
+    /// Position of the first beat-grid line in seconds, used for phase SYNC.
+    pub beat_offset: f64,
     pub peaks: Vec<f32>,
     pub bands: Vec<[f32; 3]>,
     pub detail: Vec<WaveBin>,
@@ -95,6 +98,7 @@ impl Track {
             frames,
             sample_rate,
             bpm: 120.,
+            beat_offset: 0.,
             peaks,
             bands,
             detail,
@@ -137,8 +141,9 @@ pub fn is_audio(path: &Path) -> bool {
 
 pub fn load(path: &Path, auto_bpm: bool) -> Result<Arc<Track>> {
     let metadata = std::fs::metadata(path).context("Nie można otworzyć pliku")?;
-    if metadata.len() > 100 * 1024 * 1024 {
-        bail!("Plik przekracza limit 100 MiB");
+    // Uncompressed WAV/AIFF sets of 10+ minutes exceed 100 MiB; memory is bounded by MAX_FRAMES.
+    if metadata.len() > MAX_FILE_BYTES {
+        bail!("Plik przekracza limit 1 GiB");
     }
     let (frames, sr) = decode(path)
         .or_else(|native| decode_ffmpeg(path).with_context(|| format!("Dekoder Rust: {native}")))?;
@@ -182,6 +187,7 @@ pub fn load(path: &Path, auto_bpm: bool) -> Result<Arc<Track>> {
     } else if let Some(bpm) = declared_bpm {
         track.bpm = bpm;
     }
+    track.beat_offset = estimate_beat_offset(&track, track.bpm);
     Ok(Arc::new(track))
 }
 
@@ -312,11 +318,12 @@ fn decode_ffmpeg(path: &Path) -> Result<(Vec<Frame>, u32)> {
     Ok((frames, 48000))
 }
 
-pub fn estimate_bpm(track: &Track) -> Option<f64> {
+/// Spectral-flux style onset envelope (positive RMS differences) at about 200 Hz.
+fn onset_envelope(track: &Track, seconds: usize) -> (Vec<f64>, f64) {
     let hop = (track.sample_rate as usize / 200).max(1);
-    let max = track.frames.len().min(track.sample_rate as usize * 90);
+    let max = track.frames.len().min(track.sample_rate as usize * seconds);
     let mut previous = 0.;
-    let mut envelope: Vec<f64> = track.frames[..max]
+    let envelope: Vec<f64> = track.frames[..max]
         .chunks(hop)
         .map(|chunk| {
             let rms = (chunk
@@ -330,7 +337,42 @@ pub fn estimate_bpm(track: &Track) -> Option<f64> {
             flux
         })
         .collect();
-    let hz = track.sample_rate as f64 / hop as f64;
+    (envelope, track.sample_rate as f64 / hop as f64)
+}
+
+/// Finds the beat phase that best lines up with onsets for a known tempo.
+/// Returns the first beat position in seconds, within one beat period.
+pub fn estimate_beat_offset(track: &Track, bpm: f64) -> f64 {
+    if !(bpm.is_finite() && bpm > 0.) || track.sample_rate == 0 {
+        return 0.;
+    }
+    let (envelope, hz) = onset_envelope(track, 60);
+    let period = hz * 60. / bpm;
+    if envelope.len() < (period * 4.) as usize || period < 2. {
+        return 0.;
+    }
+    let steps = period.floor() as usize;
+    let mut best = (0usize, f64::MIN);
+    for phase in 0..steps {
+        let mut score = 0.;
+        let mut at = phase as f64;
+        while (at as usize) < envelope.len() {
+            let i = (at.round() as usize).min(envelope.len() - 1);
+            // Neighbours count half, absorbing tempo drift without shifting the peak.
+            let side =
+                envelope.get(i.wrapping_sub(1)).unwrap_or(&0.) + envelope.get(i + 1).unwrap_or(&0.);
+            score += envelope[i] + side * 0.5;
+            at += period;
+        }
+        if score > best.1 {
+            best = (phase, score);
+        }
+    }
+    best.0 as f64 / hz
+}
+
+pub fn estimate_bpm(track: &Track) -> Option<f64> {
+    let (mut envelope, hz) = onset_envelope(track, 90);
     if envelope.len() < (hz * 4.) as usize {
         return None;
     }

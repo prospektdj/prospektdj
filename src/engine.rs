@@ -1,5 +1,5 @@
 use crate::{
-    dsp::{cross_gains, Biquad},
+    dsp::{cross_gains, Biquad, PitchShifter},
     effects::{Effects, FxParam, FxSettings, FxSwitch},
     media::{Frame, Track},
     recording::{Block, CaptureSink, BLOCK_SIZE},
@@ -50,6 +50,8 @@ pub struct DeckView {
     pub eq: [f32; 3],
     pub pfl: bool,
     pub scratch: bool,
+    /// Keep the original musical key while the tempo changes.
+    pub key_lock: bool,
     pub mode: PadMode,
 }
 impl Default for DeckView {
@@ -73,6 +75,7 @@ impl Default for DeckView {
             eq: [0.; 3],
             pfl: false,
             scratch: false,
+            key_lock: false,
             mode: PadMode::HotCue,
         }
     }
@@ -145,12 +148,18 @@ pub enum DeckControl {
     HotCue(usize, bool),
     Pfl,
     ScratchMode,
+    KeyLock,
     Jog(f64, f64),
     Bend(f64),
 }
 pub enum Command {
     DeckCount(usize),
     Deck(usize, DeckControl),
+    /// Match `deck` tempo and beat phase to `master`.
+    Sync {
+        deck: usize,
+        master: usize,
+    },
     Cross(f32),
     Master(f32),
     Microphone(Option<crossbeam_channel::Receiver<Frame>>),
@@ -183,6 +192,7 @@ struct Deck {
     frame: f64,
     slip_frame: Option<f64>,
     filters: [Biquad; 3],
+    shifter: PitchShifter,
     smooth_gain: f32,
     pre_gain: f32,
     smooth_pre_gain: f32,
@@ -201,6 +211,7 @@ impl Deck {
             frame: 0.,
             slip_frame: None,
             filters: [Biquad::default(); 3],
+            shifter: PitchShifter::new(sample_rate),
             smooth_gain: 0.,
             pre_gain: 1.,
             smooth_pre_gain: 1.,
@@ -363,8 +374,11 @@ impl Engine {
                 }
             }
             Command::Deck(i, control) if i < 4 => self.deck_control(i, control),
-            Command::Cross(x) => self.cross = x.clamp(0., 1.),
-            Command::Master(x) => self.master = x.clamp(0., 1.),
+            Command::Sync { deck, master } if deck < 4 && master < 4 && deck != master => {
+                self.sync(deck, master);
+            }
+            Command::Cross(x) if x.is_finite() => self.cross = x.clamp(0., 1.),
+            Command::Master(x) if x.is_finite() => self.master = x.clamp(0., 1.),
             Command::Microphone(input) => self.microphone = input,
             Command::MicVolume(volume) => {
                 self.mic_volume = if volume.is_finite() {
@@ -373,8 +387,8 @@ impl Engine {
                     0.
                 }
             }
-            Command::Phones(x) => self.phones = x.clamp(0., 1.),
-            Command::SampleVolume(x) => self.sample_volume = x.clamp(0., 1.),
+            Command::Phones(x) if x.is_finite() => self.phones = x.clamp(0., 1.),
+            Command::SampleVolume(x) if x.is_finite() => self.sample_volume = x.clamp(0., 1.),
             Command::SampleLoad(i, track) if i < 4 => {
                 let end = track.frames.len() as f64;
                 self.samples[i] = Some(Sample {
@@ -540,6 +554,7 @@ impl Engine {
                     pfl: d.view.pfl,
                     mode: d.view.mode,
                     scratch: d.view.scratch,
+                    key_lock: d.view.key_lock,
                     ..Default::default()
                 };
                 d.frame = 0.;
@@ -556,7 +571,7 @@ impl Engine {
                 d.view = DeckView {
                     hot,
                     fx: d.view.fx,
-                    bpm: track.bpm,
+                    bpm: sane_bpm(track.bpm),
                     track: Some(track),
                     volume: d.view.volume,
                     gain_db: d.view.gain_db,
@@ -564,8 +579,10 @@ impl Engine {
                     pfl: d.view.pfl,
                     mode: d.view.mode,
                     scratch: d.view.scratch,
+                    key_lock: d.view.key_lock,
                     ..Default::default()
                 };
+                d.shifter.reset();
                 d.frame = 0.;
                 d.master_frames = 0;
                 d.counted = false;
@@ -587,6 +604,9 @@ impl Engine {
                     d.view.playing = !d.view.playing;
                     if d.view.playing && d.frame >= track.frames.len() as f64 {
                         d.frame = 0.;
+                        d.master_frames = 0;
+                        d.counted = false;
+                        d.performance = d.performance.wrapping_add(1);
                     }
                 }
             }
@@ -606,7 +626,7 @@ impl Engine {
                 d.jog = None;
             }
             DeckControl::Seek(s) => {
-                if let Some(t) = &d.view.track {
+                if let (Some(t), true) = (&d.view.track, s.is_finite()) {
                     d.frame = s.clamp(0., t.duration()) * t.sample_rate as f64;
                     if d.view.loop_range.is_some_and(|(a, b)| s < a || s >= b) {
                         d.view.loop_range = None;
@@ -624,16 +644,16 @@ impl Engine {
                     d.view.cue = d.frame / t.sample_rate as f64;
                 }
             }
-            DeckControl::Rate(rate) => d.view.rate = rate.clamp(0.5, 1.5),
-            DeckControl::Bpm(bpm) => d.view.bpm = bpm.clamp(40., 300.),
+            DeckControl::Rate(rate) if rate.is_finite() => d.view.rate = rate.clamp(0.5, 1.5),
+            DeckControl::Bpm(bpm) if bpm.is_finite() => d.view.bpm = bpm.clamp(40., 300.),
             DeckControl::Gain(v) => {
                 if v.is_finite() {
                     d.view.gain_db = v.clamp(-24., 12.);
                     d.pre_gain = 10_f32.powf(d.view.gain_db / 20.);
                 }
             }
-            DeckControl::Volume(v) => d.view.volume = v.clamp(0., 1.),
-            DeckControl::Eq(b, g) if b < 3 => {
+            DeckControl::Volume(v) if v.is_finite() => d.view.volume = v.clamp(0., 1.),
+            DeckControl::Eq(b, g) if b < 3 && g.is_finite() => {
                 d.view.eq[b] = g.clamp(-24., 12.);
                 d.filters[b].configure(b, d.view.eq[b], self.sample_rate);
             }
@@ -666,14 +686,15 @@ impl Engine {
             DeckControl::PadMode(mode) => d.view.mode = mode,
             DeckControl::Pfl => d.view.pfl = !d.view.pfl,
             DeckControl::ScratchMode => d.view.scratch = !d.view.scratch,
+            DeckControl::KeyLock => d.view.key_lock = !d.view.key_lock,
             DeckControl::Jog(speed, ttl) => {
-                d.jog = if ttl <= 0. {
+                d.jog = if ttl.is_nan() || ttl <= 0. || !speed.is_finite() {
                     None
                 } else {
                     Some((speed.clamp(-6., 6.), (ttl * self.sample_rate as f64) as u64))
                 }
             }
-            DeckControl::Bend(v) => d.bend = v.clamp(-0.25, 0.25),
+            DeckControl::Bend(v) if v.is_finite() => d.bend = v.clamp(-0.25, 0.25),
             DeckControl::HotCue(p, erase) if p < 8 => {
                 if let Some(t) = &d.view.track {
                     if erase {
@@ -776,6 +797,47 @@ impl Engine {
             }
         }
     }
+    /// Tempo match plus beat-phase alignment against the master deck's beat grid.
+    /// Half/double tempo is chosen when it keeps the pitch fader closer to zero.
+    fn sync(&mut self, i: usize, master: usize) -> bool {
+        let (Some(mt), Some(st)) = (
+            self.decks[master].view.track.clone(),
+            self.decks[i].view.track.clone(),
+        ) else {
+            return false;
+        };
+        let m = &self.decks[master];
+        let m_bpm = sane_bpm(m.view.bpm);
+        let m_tempo = m_bpm * m.view.rate;
+        let m_beats = (m.frame / mt.sample_rate as f64 - mt.beat_offset) * m_bpm / 60.;
+        let m_playing = m.view.playing;
+        let d = &mut self.decks[i];
+        let s_bpm = sane_bpm(d.view.bpm);
+        let (k, rate) = [1., 0.5, 2.]
+            .into_iter()
+            .map(|k| (k, m_tempo * k / s_bpm))
+            .min_by(|a, b| (a.1 - 1.).abs().total_cmp(&(b.1 - 1.).abs()))
+            .unwrap_or((1., 1.));
+        d.view.rate = rate.clamp(0.5, 1.5);
+        if let Some(position) = d.slip_frame.take() {
+            d.frame = position;
+            d.view.reverse = false;
+        }
+        if m_playing && d.view.loop_range.is_none() {
+            let s_beats = (d.frame / st.sample_rate as f64 - st.beat_offset) * s_bpm / 60.;
+            let target = (m_beats * k).rem_euclid(1.);
+            let mut delta = target - s_beats.rem_euclid(1.);
+            if delta >= 0.5 {
+                delta -= 1.;
+            } else if delta < -0.5 {
+                delta += 1.;
+            }
+            let seconds =
+                (d.frame / st.sample_rate as f64 + delta * 60. / s_bpm).clamp(0., st.duration());
+            d.frame = seconds * st.sample_rate as f64;
+        }
+        true
+    }
     fn trigger(&mut self, i: usize) {
         if let Some(s) = &self.samples[i] {
             self.voices[i] = Some(Voice {
@@ -875,6 +937,10 @@ impl Engine {
                 && !(d.view.reverse && d.frame <= 0.);
             d.amp += (if active { 1. } else { 0. } - d.amp) * 0.04;
             let mut frame = track.sample(d.frame);
+            let locked = d.view.key_lock && d.jog.is_none() && d.slip_frame.is_none() && speed > 0.;
+            frame = d
+                .shifter
+                .process(frame, if locked { 1. / speed } else { 1. });
             d.smooth_pre_gain += (d.pre_gain - d.smooth_pre_gain) * 0.002;
             for x in &mut frame {
                 *x *= d.amp * d.smooth_pre_gain;
@@ -1071,3 +1137,28 @@ pub fn offline(rx: Receiver<Command>, view: Arc<Mutex<Snapshot>>, stop: Receiver
     }
 }
 pub type CommandSender = Sender<Command>;
+
+/// Track BPM from tags or detection may be missing; loops and samples divide by it.
+pub fn sane_bpm(bpm: f64) -> f64 {
+    if bpm.is_finite() && bpm >= 40. {
+        bpm.min(300.)
+    } else {
+        120.
+    }
+}
+
+/// Picks the deck that SYNC follows: the paired deck when it plays, then any
+/// playing deck, then any loaded deck. Never an empty deck.
+pub fn sync_master(snapshot: &Snapshot, i: usize) -> Option<usize> {
+    snapshot.decks.get(i)?.track.as_ref()?;
+    let count = snapshot.deck_count.clamp(2, 4);
+    let candidates: Vec<usize> = std::iter::once(i ^ 1)
+        .chain(0..count)
+        .filter(|&d| d != i && d < count && snapshot.decks[d].track.is_some())
+        .collect();
+    candidates
+        .iter()
+        .copied()
+        .find(|&d| snapshot.decks[d].playing)
+        .or_else(|| candidates.first().copied())
+}

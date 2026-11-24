@@ -72,6 +72,8 @@ pub struct Settings {
     pub library_scope: crate::library::Scope,
     pub dock_tab: usize,
     pub light: bool,
+    /// Interface skin; `Classic` is the original flat black look.
+    pub skin: crate::theme::Skin,
     pub white_jog: bool,
     pub waveform_master: [bool; 4],
     pub deck_count: usize,
@@ -148,6 +150,7 @@ impl Default for Settings {
             library_scope: crate::library::Scope::All,
             dock_tab: 0,
             light: false,
+            skin: crate::theme::Skin::Modern,
             white_jog: false,
             waveform_master: [true, false, false, false],
             deck_count: 2,

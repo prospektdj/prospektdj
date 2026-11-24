@@ -281,6 +281,7 @@ pub fn actions() -> Vec<String> {
             "cue",
             "setcue",
             "sync",
+            "keylock",
             "scratch",
             "pfl",
             "loopoff",

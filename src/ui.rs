@@ -212,6 +212,15 @@ fn storage_category(ui: &mut egui::Ui, label: &str, kind: usize, body: impl FnOn
     })
     .body(body);
 }
+/// Header label: the original text in the classic skin, a short form in the modern one
+/// so the whole top bar stays inside the window.
+fn header_label(long: &'static str, short: &'static str) -> &'static str {
+    if prospekt_dj::theme::classic() {
+        long
+    } else {
+        short
+    }
+}
 fn cue_color(n: usize) -> Color32 {
     let [r, g, b] = prospekt_dj::music_view::CUE_RGB[n];
     Color32::from_rgb(r, g, b)
@@ -441,6 +450,7 @@ impl Studio {
                 .iter()
                 .position(|p| p.source == settings.controller_profile_source);
         }
+        prospekt_dj::theme::set_skin(settings.skin);
         console_theme(&cc.egui_ctx, settings.light);
         i18n::set_language(&settings.language);
         crate::fonts::install(&cc.egui_ctx, settings.logo_font.as_deref(), &settings);
@@ -1644,11 +1654,22 @@ impl Studio {
         }
     }
     fn sync(&mut self, i: usize) {
-        let other = &self.snapshot.decks[i ^ 1];
-        let rate = other.bpm * other.rate / self.snapshot.decks[i].bpm;
-        self.deck(i, DeckControl::Rate(rate));
-        self.synced_at[i] = Some(Instant::now());
-        self.status = "Dopasowano tempo. SYNC nie wyrównuje fazy bitów.".into();
+        match engine::sync_master(&self.snapshot, i) {
+            Some(master) => {
+                self.send(Command::Sync { deck: i, master });
+                self.synced_at[i] = Some(Instant::now());
+                self.status = format!(
+                    "SYNC: tempo i faza bitów dopasowane do deku {}.",
+                    deck_letter(master)
+                );
+            }
+            None if self.snapshot.decks[i].track.is_none() => {
+                self.status = "SYNC: najpierw załaduj utwór na ten dek.".into();
+            }
+            None => {
+                self.status = "SYNC: brak innego deku z utworem.".into();
+            }
+        }
     }
     fn top(&mut self, ctx: &egui::Context) {
         self.monitor.poll();
@@ -1667,6 +1688,18 @@ impl Studio {
                 self.measured_fps = (self.frame_times.len() - 1) as f32 / span;
             }
         }
+        let header_width = ctx.screen_rect().width();
+        // Narrow windows: smaller labels and a wrapped second row keep every
+        // header function visible; icons only below 1100 px.
+        self.emoji.compact = if prospekt_dj::theme::classic() {
+            0
+        } else if header_width < 1100. {
+            2
+        } else if header_width < 1800. {
+            1
+        } else {
+            0
+        };
         egui::TopBottomPanel::top("header")
             .frame(
                 egui::Frame::new()
@@ -1746,78 +1779,119 @@ impl Studio {
                                 .on_hover_text("RAM: system memory used / total.");
                             }
                         });
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            if ui
-                                .add(self.emoji.icon_button(ctx, "⚙️", "USTAWIENIA"))
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                                self.refresh_audio_outputs();
-                                self.midi_names = midi::inputs();
-                            }
-                            if ui
-                                .add(self.emoji.icon_button(ctx, "🔌", "DEV"))
-                                .on_hover_text("Podłączone kontrolery i nośniki")
-                                .clicked()
-                            {
-                                self.device_window = true;
-                                self.midi_names = midi::inputs();
-                            }
-                            if ui
-                                .add(self.emoji.icon_button(ctx, "⌨️", "KEY"))
-                                .on_hover_text("Skróty klawiaturowe")
-                                .clicked()
-                            {
-                                self.key_window = true;
-                            }
-                            if ui
-                                .add(self.emoji.icon_button(ctx, "🎹", "MIDI LEARN"))
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                                self.settings_tab = 1;
-                                self.midi_learn_reveal = true;
-                                self.midi_names = midi::inputs();
-                            }
-                            if ui
-                                .add(self.emoji.icon_button(ctx, "🖥️", "PEŁNY EKRAN"))
-                                .on_hover_text("Pełny ekran — F11")
-                                .clicked()
-                            {
-                                toggle_fullscreen(ctx);
-                            }
-                            if ui
-                                .add(
-                                    self.emoji
-                                        .icon_button(ctx, "🎵", tr("BIBLIOTEKA"))
-                                        .selected(self.library_focus),
-                                )
-                                .clicked()
-                            {
-                                self.library_focus = !self.library_focus;
-                            }
-                            self.header_audio_controls(ui);
-                            let _ = ui.add(self.emoji.icon_button(ctx, "🎚️", "MASTER"));
-                            if ui
-                                .add(self.emoji.icon_button(
-                                    ctx,
-                                    "🔊",
-                                    if self.runtime.as_ref().is_some_and(|r| r.is_running()) {
-                                        "AUDIO ON"
-                                    } else {
-                                        "AUDIO OFF"
-                                    },
-                                ))
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                                self.settings_tab = 0;
-                                self.refresh_audio_outputs();
-                            }
-                        });
+                        // Wrap onto a second row instead of overlapping the clock.
+                        ui.with_layout(
+                            egui::Layout::right_to_left(Align::Center)
+                                .with_main_wrap(!prospekt_dj::theme::classic()),
+                            |ui| {
+                                if ui
+                                    .add(self.emoji.icon_button(
+                                        ctx,
+                                        "⚙️",
+                                        header_label("USTAWIENIA", "USTAW."),
+                                    ))
+                                    .clicked()
+                                {
+                                    self.settings_open = true;
+                                    self.refresh_audio_outputs();
+                                    self.midi_names = midi::inputs();
+                                }
+                                if ui
+                                    .add(self.emoji.icon_button(ctx, "🔌", "DEV"))
+                                    .on_hover_text("Podłączone kontrolery i nośniki")
+                                    .clicked()
+                                {
+                                    self.device_window = true;
+                                    self.midi_names = midi::inputs();
+                                }
+                                if ui
+                                    .add(self.emoji.icon_button(ctx, "⌨️", "KEY"))
+                                    .on_hover_text("Skróty klawiaturowe")
+                                    .clicked()
+                                {
+                                    self.key_window = true;
+                                }
+                                if ui
+                                    .add(self.emoji.icon_button(
+                                        ctx,
+                                        "🎹",
+                                        header_label("MIDI LEARN", "MIDI"),
+                                    ))
+                                    .clicked()
+                                {
+                                    self.settings_open = true;
+                                    self.settings_tab = 1;
+                                    self.midi_learn_reveal = true;
+                                    self.midi_names = midi::inputs();
+                                }
+                                if ui
+                                    .add(self.emoji.icon_button(
+                                        ctx,
+                                        "🖥️",
+                                        header_label("PEŁNY EKRAN", "EKRAN"),
+                                    ))
+                                    .on_hover_text("Pełny ekran — F11")
+                                    .clicked()
+                                {
+                                    toggle_fullscreen(ctx);
+                                }
+                                if ui
+                                    .add(
+                                        self.emoji
+                                            .icon_button(
+                                                ctx,
+                                                "🎵",
+                                                tr(header_label("BIBLIOTEKA", "BIBL.")),
+                                            )
+                                            .selected(self.library_focus),
+                                    )
+                                    .clicked()
+                                {
+                                    self.library_focus = !self.library_focus;
+                                }
+                                self.header_audio_controls(ui);
+                                if prospekt_dj::theme::classic() {
+                                    let _ = ui.add(self.emoji.icon_button(ctx, "🎚️", "MASTER"));
+                                }
+                                if ui
+                                    .add(
+                                        self.emoji
+                                            .icon_button(
+                                                ctx,
+                                                "🔊",
+                                                header_label(
+                                                    if self
+                                                        .runtime
+                                                        .as_ref()
+                                                        .is_some_and(|r| r.is_running())
+                                                    {
+                                                        "AUDIO ON"
+                                                    } else {
+                                                        "AUDIO OFF"
+                                                    },
+                                                    if self.emoji.hidden { "AUDIO" } else { "" },
+                                                ),
+                                            )
+                                            .selected(
+                                                !prospekt_dj::theme::classic()
+                                                    && self
+                                                        .runtime
+                                                        .as_ref()
+                                                        .is_some_and(|r| r.is_running()),
+                                            ),
+                                    )
+                                    .clicked()
+                                {
+                                    self.settings_open = true;
+                                    self.settings_tab = 0;
+                                    self.refresh_audio_outputs();
+                                }
+                            },
+                        );
                     },
                 );
             });
+        self.emoji.compact = 0;
         self.footer_cover_reflection = None;
         if self.settings.cover_strip && self.settings.cover_reflections {
             egui::TopBottomPanel::bottom("footer-cover-reflection")
@@ -1899,7 +1973,7 @@ impl Studio {
                                                 .color(*color),
                                         )
                                         .min_size(Vec2::new(20., 15.))
-                                        .corner_radius(0),
+                                        .corner_radius(prospekt_dj::theme::radius()),
                                     )
                                     .on_hover_text(format!(
                                         "Załaduj odsłuchiwany utwór na dek {}",
@@ -1983,7 +2057,11 @@ impl Studio {
             let rect = row_response.response.rect;
             ui.painter().set(
                 row_background,
-                egui::Shape::rect_filled(rect, 0., Color32::from_rgb(26, 26, 26)),
+                egui::Shape::rect_filled(
+                    rect,
+                    prospekt_dj::theme::radius_f(4.),
+                    prospekt_dj::theme::row_bg(),
+                ),
             );
             let mixer_rect = egui::Rect::from_min_size(
                 egui::pos2(row_response.inner.left(), rect.top()),
@@ -1991,7 +2069,11 @@ impl Studio {
             );
             ui.painter().set(
                 mixer_background,
-                egui::Shape::rect_filled(mixer_rect, 0., Color32::from_gray(26)),
+                egui::Shape::rect_filled(
+                    mixer_rect,
+                    prospekt_dj::theme::radius_f(4.),
+                    prospekt_dj::theme::row_bg(),
+                ),
             );
         }
         ui.spacing_mut().item_spacing = deck_spacing;
@@ -2105,17 +2187,22 @@ impl Studio {
     fn deck_ui(&mut self, ui: &mut egui::Ui, i: usize) {
         let d = self.snapshot.decks[i].clone();
         egui::Frame::new()
-            .fill(Color32::from_rgb(26, 26, 26))
+            .fill(prospekt_dj::theme::row_bg())
             .inner_margin(5)
-            .corner_radius(0)
+            .corner_radius(prospekt_dj::theme::radius())
             .stroke(Stroke::NONE)
             .show(ui, |ui| {
                 ui.set_min_height(204.);
                 let show_platter = ui.ctx().screen_rect().width() >= 1200.;
-                let jog_gap = if i.is_multiple_of(2) {
-                    26.
+                // Modern skins use one gap between info and platter on both decks.
+                let jog_gap = if prospekt_dj::theme::classic() {
+                    if i.is_multiple_of(2) {
+                        26.
+                    } else {
+                        ui.spacing().item_spacing.x
+                    }
                 } else {
-                    ui.spacing().item_spacing.x
+                    prospekt_dj::theme::GAP
                 };
                 let info = (ui.available_width() - if show_platter { 186. + jog_gap } else { 0. })
                     .max(180.);
@@ -2124,6 +2211,7 @@ impl Studio {
                     let mut jog_rect = None;
                     if show_platter && i % 2 == 1 {
                         jog_rect = Some(self.jog_panel(ui, i, &d));
+                        ui.add_space((jog_gap - ui.spacing().item_spacing.x).max(0.));
                     }
                     let info_panel = ui.allocate_ui_with_layout(
                         Vec2::new(info, 0.),
@@ -2155,7 +2243,7 @@ impl Studio {
                                         egui::pos2(right, jog.bottom()),
                                     ),
                                     0.,
-                                    Color32::BLACK,
+                                    prospekt_dj::theme::deck_bg(),
                                 ),
                             );
                         }
@@ -2193,7 +2281,11 @@ impl Studio {
         );
         ui.painter().set(
             background,
-            egui::Shape::rect_filled(panel.response.rect, 0., Color32::BLACK),
+            egui::Shape::rect_filled(
+                panel.response.rect,
+                prospekt_dj::theme::radius_f(6.),
+                prospekt_dj::theme::deck_bg(),
+            ),
         );
         panel.response.rect
     }
@@ -2239,9 +2331,13 @@ impl Studio {
                     self.synced_at[i].is_some_and(|t| t.elapsed() < Duration::from_millis(350)),
                     accent,
                     self.settings.reduced_motion,
-                    (utilities_width - 100.).max(48.),
+                    if prospekt_dj::theme::classic() {
+                        (utilities_width - 100.).max(48.)
+                    } else {
+                        (utilities_width - 100.).min(ui.available_width()).max(48.)
+                    },
                 )
-                .on_hover_text("One-shot tempo match")
+                .on_hover_text("SYNC: tempo + faza bitów")
                 .clicked()
                 {
                     self.sync(i);
@@ -2270,7 +2366,7 @@ impl Studio {
                                 Color32::from_gray(70)
                             },
                         ))
-                        .corner_radius(0.),
+                        .corner_radius(prospekt_dj::theme::radius()),
                     )
                 };
                 let set_cue = button(ui, "SET CUE", 45., false);
@@ -2282,6 +2378,13 @@ impl Studio {
                 }
                 if button(ui, "VINYL", 36., d.scratch).clicked() {
                     self.deck(i, DeckControl::ScratchMode);
+                }
+                if !prospekt_dj::theme::classic()
+                    && button(ui, "KEYLOCK", 46., d.key_lock)
+                        .on_hover_text("Key lock: tempo zmienia się bez zmiany tonacji")
+                        .clicked()
+                {
+                    self.deck(i, DeckControl::KeyLock);
                 }
                 let minus = button(ui, "−", 17., false);
                 let plus = button(ui, "+", 17., false);
@@ -2445,6 +2548,57 @@ impl Studio {
                 Stroke::new(3_f32, ACCENTS[i]),
             );
         }
+        if d.track.is_some() && !self.settings.reduced_motion && !prospekt_dj::theme::classic() {
+            // Follow the source playhead: pause holds the hand, reverse turns it back.
+            let angle = (d.position.rem_euclid(2.) as f32) * std::f32::consts::PI
+                - std::f32::consts::FRAC_PI_2;
+            let direction = Vec2::angled(angle);
+            let needle = Color32::BLACK;
+            if !self.settings.white_jog {
+                p.line_segment(
+                    [center - direction * 9., center + direction * 61.],
+                    Stroke::new(11_f32, Color32::from_gray(95)),
+                );
+            }
+            p.line_segment(
+                [center - direction * 9., center + direction * 61.],
+                Stroke::new(9_f32, needle.gamma_multiply(0.85)),
+            );
+            p.circle_filled(center, 7.2, Color32::from_rgb(153, 221, 255));
+            if d.playing {
+                ui.ctx().request_repaint_after(Duration::from_millis(33));
+            }
+        }
+        if let Some(track) = d.track.as_ref().filter(|_| !prospekt_dj::theme::classic()) {
+            // Track progress ring: elapsed part in the deck accent, rest dimmed.
+            let progress = (d.position / track.duration().max(0.001)).clamp(0., 1.) as f32;
+            let top = -std::f32::consts::FRAC_PI_2;
+            let ring = |from: f32, to: f32| -> Vec<egui::Pos2> {
+                let steps = ((to - from) * 40.).ceil().max(1.) as usize;
+                (0..=steps)
+                    .map(|n| {
+                        let t = from + (to - from) * n as f32 / steps as f32;
+                        center + Vec2::angled(top + t * std::f32::consts::TAU) * 74.5
+                    })
+                    .collect()
+            };
+            p.add(egui::Shape::line(
+                ring(0., 1.),
+                Stroke::new(3_f32, Color32::from_gray(45)),
+            ));
+            if progress > 0. {
+                let remaining = track.duration() - d.position;
+                let color = if remaining < 30. && remaining > 0. {
+                    Color32::from_rgb(235, 60, 60)
+                } else {
+                    ACCENTS[i]
+                };
+                p.add(egui::Shape::line(
+                    ring(0., progress),
+                    Stroke::new(3_f32, color),
+                ));
+            }
+        }
         for (dy, label, size, color) in [
             (
                 -39.,
@@ -2494,7 +2648,8 @@ impl Studio {
                 color,
             );
         }
-        if d.track.is_some() && !self.settings.reduced_motion {
+        // Original skin: hand drawn over the readout, exactly as before.
+        if d.track.is_some() && !self.settings.reduced_motion && prospekt_dj::theme::classic() {
             // Follow the source playhead: pause holds the hand, reverse turns it back.
             let angle = (d.position.rem_euclid(2.) as f32) * std::f32::consts::PI
                 - std::f32::consts::FRAC_PI_2;
@@ -2574,14 +2729,17 @@ impl Studio {
         let header_background = ui.painter().add(egui::Shape::Noop);
         let row_spacing = ui.spacing().item_spacing.y;
         ui.spacing_mut().item_spacing.y = 0.;
+        // Modern skins mirror deck B (letter on the outer edge); Classic keeps the original.
+        let mirrored = i % 2 == 1 && !prospekt_dj::theme::classic();
         ui.horizontal_top(|ui| {
             let letter_size = egui::TextStyle::Small.resolve(ui.style()).size * 4.;
-            ui.label(
-                RichText::new(letter(i))
-                    .size(letter_size)
-                    .family(egui::FontFamily::Name("Arial Bold".into()))
-                    .color(accent),
-            );
+            let deck_letter = RichText::new(letter(i))
+                .size(letter_size)
+                .family(egui::FontFamily::Name("Arial Bold".into()))
+                .color(accent);
+            if !mirrored {
+                ui.label(deck_letter.clone());
+            }
             if ui.ctx().screen_rect().width() < 1200.
                 && jog_action_button(ui, "↑", d.track.is_some() && !self.loading[i], false)
                     .on_hover_text("Wyrzuć utwór z deku")
@@ -2604,8 +2762,22 @@ impl Studio {
             {
                 self.focused = i;
             }
-            ui.horizontal(|ui| {
-                if let Some(texture) = &self.covers[i] {
+            let letter_width = if mirrored {
+                ui.painter()
+                    .layout_no_wrap(
+                        letter(i).to_string(),
+                        FontId::new(letter_size, egui::FontFamily::Name("Arial Bold".into())),
+                        accent,
+                    )
+                    .size()
+                    .x
+                    + ui.spacing().item_spacing.x
+            } else {
+                0.
+            };
+            let covers = &self.covers;
+            let title = |ui: &mut egui::Ui| {
+                if let Some(texture) = &covers[i] {
                     ui.image((texture.id(), Vec2::splat(30.)));
                 }
                 ui.vertical(|ui| {
@@ -2643,12 +2815,31 @@ impl Studio {
                         .truncate(),
                     );
                 });
-            });
+            };
+            if mirrored {
+                ui.allocate_ui_with_layout(
+                    Vec2::new((ui.available_width() - letter_width).max(40.), 0.),
+                    egui::Layout::left_to_right(Align::Min),
+                    title,
+                );
+            } else {
+                // Original layout path.
+                ui.horizontal(title);
+            }
+            if mirrored {
+                ui.with_layout(egui::Layout::right_to_left(Align::Min), |ui| {
+                    ui.label(deck_letter);
+                });
+            }
         });
         ui.spacing_mut().item_spacing.y = 4.;
         let start = ui.next_widget_position();
         let right = ui.max_rect().right().min(ui.ctx().screen_rect().right())
-            - if i % 2 == 1 { 26. } else { 0. };
+            - if i % 2 == 1 && prospekt_dj::theme::classic() {
+                26.
+            } else {
+                0.
+            };
         let waveform_rect =
             egui::Rect::from_min_size(start, Vec2::new((right - start.x).max(1.), 33.));
         ui.painter().set(
@@ -2656,7 +2847,7 @@ impl Studio {
             egui::Shape::rect_filled(
                 egui::Rect::from_min_max(header_top, waveform_rect.right_bottom()),
                 0.,
-                Color32::BLACK,
+                prospekt_dj::theme::deck_bg(),
             ),
         );
         let mut waveform_ui = ui.new_child(
@@ -2679,17 +2870,59 @@ impl Studio {
         }
         ui.spacing_mut().item_spacing.y = row_spacing;
         let controls = 98.;
-        let show_options_inline = ui.available_width() >= 460.;
+        // Options column sits beside the pads whenever full-size pads still fit.
+        let show_options_inline = if prospekt_dj::theme::classic() {
+            ui.available_width() >= 460.
+        } else {
+            ui.available_width() >= 265. + controls + 8.
+        };
         let pads = (ui.available_width() - if show_options_inline { controls } else { 0. } - 6.)
-            .clamp(172., 268.);
+            .clamp(
+                172.,
+                if prospekt_dj::theme::classic() {
+                    268.
+                } else {
+                    265.
+                },
+            );
+        // Deck B mirrors deck A: pads sit at the outer edge, options face the platter.
         ui.horizontal_top(|ui| {
+            let options = |studio: &mut Self, ui: &mut egui::Ui| {
+                ui.allocate_ui_with_layout(
+                    Vec2::new(controls, 60.),
+                    egui::Layout::top_down(Align::Min),
+                    |ui| {
+                        ui.set_width(controls);
+                        studio.pad_options(ui, i, d);
+                    },
+                );
+            };
+            if mirrored {
+                let used = pads
+                    + if show_options_inline {
+                        controls + ui.spacing().item_spacing.x
+                    } else {
+                        0.
+                    };
+                ui.add_space((ui.available_width() - used).max(0.));
+                if show_options_inline {
+                    options(self, ui);
+                }
+            }
             ui.allocate_ui_with_layout(
                 Vec2::new(pads, 60.),
                 egui::Layout::top_down(Align::Min),
                 |ui| {
                     ui.set_width(pads);
                     self.cue_pads(ui, i, d);
-                    let cue_width = (((pads - 9.) / 4.).clamp(40., 64.) * 4. + 9.).min(pads);
+                    let pad_gap = if prospekt_dj::theme::classic() {
+                        3.
+                    } else {
+                        6.
+                    };
+                    let cue_width = (((pads - 3. * pad_gap) / 4.).clamp(40., 64.) * 4.
+                        + 3. * pad_gap)
+                        .min(pads);
                     let utilities_width = ui
                         .ctx()
                         .data(|data| {
@@ -2698,28 +2931,39 @@ impl Studio {
                         .unwrap_or(168.);
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.;
-                        ui.add_space((cue_width - utilities_width).max(0.));
+                        // Utilities hug the platter side under the pads on both decks.
+                        if !mirrored {
+                            ui.add_space((cue_width - utilities_width).max(0.));
+                        }
                         self.jog_utilities(ui, i, d);
                     });
                 },
             );
-            if show_options_inline {
-                ui.allocate_ui_with_layout(
-                    Vec2::new(controls, 60.),
-                    egui::Layout::top_down(Align::Min),
-                    |ui| {
-                        ui.set_width(controls);
-                        self.pad_options(ui, i, d);
-                    },
-                );
+            if show_options_inline && !mirrored {
+                options(self, ui);
             }
         });
         if !show_options_inline {
-            ui.horizontal(|ui| self.pad_options(ui, i, d));
+            ui.horizontal(|ui| {
+                // Mirrored deck: right-align using last frame's measured row width.
+                let id = egui::Id::new(("pad-options-width", i));
+                if mirrored {
+                    let width = ui.ctx().data(|data| data.get_temp::<f32>(id)).unwrap_or(0.);
+                    ui.add_space((ui.available_width() - width).max(0.));
+                }
+                let start = ui.cursor().left();
+                self.pad_options(ui, i, d);
+                let width = ui.min_rect().right() - start;
+                ui.ctx().data_mut(|data| data.insert_temp(id, width));
+            });
         }
         let (lower_block, _) =
             ui.allocate_exact_size(Vec2::new(waveform_rect.width(), 28.), Sense::hover());
-        ui.painter().rect_filled(lower_block, 0., Color32::BLACK);
+        ui.painter().rect_filled(
+            lower_block,
+            prospekt_dj::theme::radius_f(4.),
+            prospekt_dj::theme::deck_bg(),
+        );
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.;
             if let Some(key) = d
@@ -2833,7 +3077,11 @@ impl Studio {
             });
             return;
         }
-        let gap = 3.;
+        let gap = if prospekt_dj::theme::classic() {
+            3.
+        } else {
+            6.
+        };
         let width = ((ui.available_width() - 3. * gap) / 4.).clamp(40., 64.);
         for row in 0..2 {
             ui.horizontal(|ui| {
@@ -2844,46 +3092,108 @@ impl Studio {
                     let active = d.hot[n].is_some();
                     let (rect, response) =
                         ui.allocate_exact_size(Vec2::new(width, 28.), Sense::click());
-                    let fill = if response.is_pointer_button_down_on() {
-                        color.gamma_multiply(0.4)
-                    } else if response.hovered() {
-                        Color32::from_gray(35)
-                    } else {
-                        Color32::from_gray(if active { 17 } else { 8 })
-                    };
-                    ui.painter().rect_filled(rect, 0., fill);
-                    ui.painter().rect_stroke(
-                        rect.shrink(0.5),
-                        0.,
-                        Stroke::new(1_f32, color.gamma_multiply(if active { 1. } else { 0.35 })),
-                        egui::StrokeKind::Inside,
-                    );
-                    ui.painter().rect_filled(
-                        egui::Rect::from_min_max(
-                            egui::pos2(rect.left(), rect.bottom() - 3.),
-                            rect.right_bottom(),
-                        ),
-                        0.,
-                        color.gamma_multiply(if active { 1. } else { 0.25 }),
-                    );
-                    ui.painter().text(
-                        rect.center() - egui::vec2(0., 6.),
-                        egui::Align2::CENTER_CENTER,
-                        format!("Cue {}", n + 1),
-                        FontId::proportional(10.),
-                        if active {
-                            Color32::WHITE
+                    if prospekt_dj::theme::classic() {
+                        let fill = if response.is_pointer_button_down_on() {
+                            color.gamma_multiply(0.4)
+                        } else if response.hovered() {
+                            Color32::from_gray(35)
                         } else {
-                            Color32::GRAY
-                        },
-                    );
-                    ui.painter().text(
-                        rect.center() + egui::vec2(0., 5.),
-                        egui::Align2::CENTER_CENTER,
-                        d.hot[n].map(short_time).unwrap_or_else(|| "—:—".into()),
-                        FontId::monospace(9.),
-                        color,
-                    );
+                            Color32::from_gray(if active { 17 } else { 8 })
+                        };
+                        ui.painter().rect_filled(rect, 0., fill);
+                        ui.painter().rect_stroke(
+                            rect.shrink(0.5),
+                            0.,
+                            Stroke::new(
+                                1_f32,
+                                color.gamma_multiply(if active { 1. } else { 0.35 }),
+                            ),
+                            egui::StrokeKind::Inside,
+                        );
+                        ui.painter().rect_filled(
+                            egui::Rect::from_min_max(
+                                egui::pos2(rect.left(), rect.bottom() - 3.),
+                                rect.right_bottom(),
+                            ),
+                            0.,
+                            color.gamma_multiply(if active { 1. } else { 0.25 }),
+                        );
+                        ui.painter().text(
+                            rect.center() - egui::vec2(0., 6.),
+                            egui::Align2::CENTER_CENTER,
+                            format!("Cue {}", n + 1),
+                            FontId::proportional(10.),
+                            if active {
+                                Color32::WHITE
+                            } else {
+                                Color32::GRAY
+                            },
+                        );
+                        ui.painter().text(
+                            rect.center() + egui::vec2(0., 5.),
+                            egui::Align2::CENTER_CENTER,
+                            d.hot[n].map(short_time).unwrap_or_else(|| "—:—".into()),
+                            FontId::monospace(9.),
+                            color,
+                        );
+                    } else {
+                        // Set cues are solid color pads; empty pads stay dark with a color hint.
+                        let pressed = response.is_pointer_button_down_on();
+                        let fill = if active {
+                            if pressed {
+                                color.gamma_multiply(0.55)
+                            } else if response.hovered() {
+                                color.linear_multiply(1.15)
+                            } else {
+                                color
+                            }
+                        } else if pressed {
+                            color.gamma_multiply(0.4)
+                        } else if response.hovered() {
+                            prospekt_dj::theme::palette().raised_hover
+                        } else {
+                            prospekt_dj::theme::palette().raised
+                        };
+                        ui.painter()
+                            .rect_filled(rect, prospekt_dj::theme::radius_f(3.), fill);
+                        if !active {
+                            ui.painter().rect_filled(
+                                egui::Rect::from_min_max(
+                                    egui::pos2(rect.left(), rect.bottom() - 3.),
+                                    rect.right_bottom(),
+                                ),
+                                egui::CornerRadius {
+                                    sw: 3,
+                                    se: 3,
+                                    ..Default::default()
+                                },
+                                color.gamma_multiply(0.6),
+                            );
+                        }
+                        let label = if active {
+                            prospekt_dj::theme::on_color(fill)
+                        } else {
+                            Color32::from_gray(150)
+                        };
+                        ui.painter().text(
+                            rect.center() - egui::vec2(0., 6.),
+                            egui::Align2::CENTER_CENTER,
+                            format!("Cue {}", n + 1),
+                            FontId::proportional(10.),
+                            label,
+                        );
+                        ui.painter().text(
+                            rect.center() + egui::vec2(0., 5.),
+                            egui::Align2::CENTER_CENTER,
+                            d.hot[n].map(short_time).unwrap_or_else(|| "—:—".into()),
+                            FontId::monospace(9.),
+                            if active {
+                                label
+                            } else {
+                                color.gamma_multiply(0.8)
+                            },
+                        );
+                    }
                     if response.clicked() {
                         self.deck(i, DeckControl::HotCue(n, ui.input(|v| v.modifiers.shift)));
                     }
@@ -3001,7 +3311,7 @@ impl Studio {
                             }),
                     )
                     .selected(self.broadcast.is_some())
-                    .corner_radius(0)
+                    .corner_radius(prospekt_dj::theme::radius())
                     .min_size(Vec2::new(56., 28.)),
             )
             .on_hover_text("Ustawienia transmisji Icecast / Shoutcast")
@@ -3014,8 +3324,8 @@ impl Studio {
         let response = ui
             .add_enabled(
                 !self.record_stopping,
-                self.emoji
-                    .icon_button(
+                (if prospekt_dj::theme::classic() {
+                    self.emoji.icon_button(
                         ui.ctx(),
                         "🔴",
                         RichText::new(if self.record_stopping { "…" } else { "REC" })
@@ -3026,14 +3336,29 @@ impl Studio {
                                 Color32::from_rgb(255, 45, 55)
                             }),
                     )
-                    .fill(if recording {
-                        Color32::from_rgb(180, 20, 30)
+                } else {
+                    // Modern skins: a red dot only, so the top bar fits on one row.
+                    egui::Button::new(RichText::new("●").size(14.).color(if recording {
+                        Color32::WHITE
                     } else {
-                        Color32::from_gray(26)
-                    })
-                    .stroke(Stroke::new(2_f32, Color32::from_rgb(225, 42, 52)))
-                    .corner_radius(0)
-                    .min_size(Vec2::new(44., 28.)),
+                        Color32::from_rgb(255, 45, 55)
+                    }))
+                })
+                .fill(if recording {
+                    Color32::from_rgb(180, 20, 30)
+                } else {
+                    Color32::from_gray(26)
+                })
+                .stroke(Stroke::new(2_f32, Color32::from_rgb(225, 42, 52)))
+                .corner_radius(prospekt_dj::theme::radius())
+                .min_size(Vec2::new(
+                    if prospekt_dj::theme::classic() {
+                        44.
+                    } else {
+                        30.
+                    },
+                    28.,
+                )),
             )
             .on_hover_text(if self.record_stopping {
                 "Kończenie zapisu…"
@@ -3057,7 +3382,7 @@ impl Studio {
                             ui.visuals().text_color()
                         }),
                     )
-                    .corner_radius(0)
+                    .corner_radius(prospekt_dj::theme::radius())
                     .min_size(Vec2::new(58., 28.)),
             )
             .on_hover_text("Otwórz ustawienia AutoMix")
@@ -3066,26 +3391,54 @@ impl Studio {
             self.settings_open = true;
             self.settings_tab = 2;
         }
-        ui.checkbox(&mut self.settings.white_jog, "BIAŁE JOGI")
-            .on_hover_text("Białe tło jogów i czarny tekst na wszystkich dekach");
-        ui.checkbox(&mut self.settings.show_main_waveforms, "WAVEFORMY")
-            .on_hover_text("Pokaż lub ukryj główne waveformy");
+        ui.checkbox(
+            &mut self.settings.white_jog,
+            header_label("BIAŁE JOGI", "BIAŁE"),
+        )
+        .on_hover_text("Białe tło jogów i czarny tekst na wszystkich dekach");
+        ui.checkbox(
+            &mut self.settings.show_main_waveforms,
+            header_label("WAVEFORMY", "WAVE"),
+        )
+        .on_hover_text("Pokaż lub ukryj główne waveformy");
         let previous = self.settings.deck_count;
-        // Header flows right to left: emit 4 first to display 2 / 4 beside AutoMix.
-        for count in [4, 2] {
-            if ui
-                .add(
-                    self.emoji
-                        .icon_button(ui.ctx(), "💿", format!("{count} DEKI"))
-                        .selected(self.settings.deck_count == count)
-                        .corner_radius(0)
-                        .min_size(Vec2::new(54., 28.)),
-                )
-                .on_hover_text(format!("Przełącz na {count} deki"))
-                .clicked()
-            {
-                self.settings.deck_count = count;
+        if prospekt_dj::theme::classic() {
+            // Header flows right to left: emit 4 first to display 2 / 4 beside AutoMix.
+            for count in [4, 2] {
+                if ui
+                    .add(
+                        self.emoji
+                            .icon_button(ui.ctx(), "💿", format!("{count} DEKI"))
+                            .selected(self.settings.deck_count == count)
+                            .corner_radius(0)
+                            .min_size(Vec2::new(54., 28.)),
+                    )
+                    .on_hover_text(format!("Przełącz na {count} deki"))
+                    .clicked()
+                {
+                    self.settings.deck_count = count;
+                }
             }
+            if previous != self.settings.deck_count {
+                self.apply_deck_count();
+            }
+            return;
+        }
+        // One toggle replaces the separate 2 DEKI / 4 DEKI buttons.
+        let count = self.settings.deck_count;
+        let other = if count == 4 { 2 } else { 4 };
+        if ui
+            .add(
+                self.emoji
+                    .icon_button(ui.ctx(), "💿", format!("{count} DEKI"))
+                    .selected(count == 4)
+                    .corner_radius(prospekt_dj::theme::radius())
+                    .min_size(Vec2::new(54., 28.)),
+            )
+            .on_hover_text(format!("Przełącz na {other} deki"))
+            .clicked()
+        {
+            self.settings.deck_count = other;
         }
         if previous != self.settings.deck_count {
             self.apply_deck_count();
@@ -3264,19 +3617,63 @@ impl Studio {
             },
         );
     }
+    /// One channel strip (EQ + gain/fader/PFL). Modern skins put it on a raised card.
+    fn mixer_strip(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView, eq_first: bool) {
+        if prospekt_dj::theme::classic() {
+            // Original skin: the two columns sit directly in the mixer row.
+            if eq_first {
+                self.mixer_eq_column(ui, i, d);
+                self.mixer_fader_column(ui, i, d);
+            } else {
+                self.mixer_fader_column(ui, i, d);
+                self.mixer_eq_column(ui, i, d);
+            }
+            return;
+        }
+        let card = if prospekt_dj::theme::classic() {
+            egui::Frame::NONE
+        } else {
+            egui::Frame::new()
+                .fill(prospekt_dj::theme::palette().raised)
+                .stroke(Stroke::new(1_f32, prospekt_dj::theme::palette().edge))
+                .corner_radius(prospekt_dj::theme::radius_f(4.))
+                .inner_margin(egui::Margin::symmetric(1, 4))
+        };
+        card.show(ui, |ui| {
+            ui.horizontal_top(|ui| {
+                if eq_first {
+                    self.mixer_eq_column(ui, i, d);
+                    self.mixer_fader_column(ui, i, d);
+                } else {
+                    self.mixer_fader_column(ui, i, d);
+                    self.mixer_eq_column(ui, i, d);
+                }
+            });
+        });
+    }
     fn mini_mixer(&mut self, ui: &mut egui::Ui, start: usize) {
         let s = self.snapshot.clone();
+        let classic = prospekt_dj::theme::classic();
         egui::Frame::new()
-            .fill(Color32::from_gray(26))
+            .fill(if classic {
+                prospekt_dj::theme::row_bg()
+            } else {
+                prospekt_dj::theme::palette().panel
+            })
+            .stroke(if classic {
+                Stroke::NONE
+            } else {
+                Stroke::new(1_f32, prospekt_dj::theme::palette().edge)
+            })
+            .corner_radius(prospekt_dj::theme::radius_f(4.))
             .inner_margin(3)
             .show(ui, |ui| {
                 ui.set_width(196.);
                 ui.set_min_height(208.);
                 ui.spacing_mut().item_spacing = Vec2::new(2., 4.);
                 ui.horizontal_top(|ui| {
-                    ui.add_space(10.);
-                    self.mixer_eq_column(ui, start, &s.decks[start]);
-                    self.mixer_fader_column(ui, start, &s.decks[start]);
+                    ui.add_space(if classic { 10. } else { 2. });
+                    self.mixer_strip(ui, start, &s.decks[start], true);
                     ui.vertical(|ui| {
                         ui.add_space(38.);
                         meter(ui, s.decks[start].level, ACCENTS[start], 108.);
@@ -3285,21 +3682,32 @@ impl Studio {
                         ui.add_space(38.);
                         meter(ui, s.decks[start + 1].level, ACCENTS[start + 1], 108.);
                     });
-                    self.mixer_fader_column(ui, start + 1, &s.decks[start + 1]);
-                    self.mixer_eq_column(ui, start + 1, &s.decks[start + 1]);
+                    self.mixer_strip(ui, start + 1, &s.decks[start + 1], false);
                 });
-                ui.spacing_mut().slider_width = 184.;
+                ui.spacing_mut().slider_width = if classic { 184. } else { 158. };
                 ui.spacing_mut().slider_rail_height = 2.;
                 let mut cross = s.cross;
                 let response = ui
                     .horizontal(|ui| {
                         ui.add_space(6.);
-                        ui.add(
+                        if !classic {
+                            ui.label(RichText::new("A").strong().size(10.).color(ACCENTS[start]));
+                        }
+                        let slider = ui.add(
                             egui::Slider::new(&mut cross, 0.0..=1.)
                                 .trailing_fill(false)
                                 .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.35 })
                                 .show_value(false),
-                        )
+                        );
+                        if !classic {
+                            ui.label(
+                                RichText::new("B")
+                                    .strong()
+                                    .size(10.)
+                                    .color(ACCENTS[start + 1]),
+                            );
+                        }
+                        slider
                     })
                     .inner;
                 if response.changed() {
@@ -3928,7 +4336,12 @@ impl Studio {
             ui.add_space(6.);
             let preview = if self.settings.track_preview && ui.ctx().screen_rect().width() >= 1200.
             {
-                220. * right_progress
+                // Info panel mirrors the folder sidebar width.
+                (if prospekt_dj::theme::classic() {
+                    220.
+                } else {
+                    self.settings.tree_width.clamp(150., 400.)
+                }) * right_progress
             } else {
                 0.
             };
@@ -4313,7 +4726,7 @@ impl Studio {
                         RichText::new(letter(deck)).size(14.)
                             .family(egui::FontFamily::Name("Arial Bold".into()))
                             .color(ACCENTS[deck]),
-                    ).min_size(Vec2::new(30., 28.)).corner_radius(0);
+                    ).min_size(Vec2::new(30., 28.)).corner_radius(prospekt_dj::theme::radius());
                     if ui.add_enabled(!self.loading[deck], button)
                         .on_hover_text(format!("Załaduj rekomendowany utwór na kanał {}", letter(deck)))
                         .clicked() {
@@ -4377,7 +4790,7 @@ impl Studio {
                                                 RichText::new(letter(deck)).color(ACCENTS[deck]),
                                             )
                                             .min_size(Vec2::new(28., 22.))
-                                            .corner_radius(0),
+                                            .corner_radius(prospekt_dj::theme::radius()),
                                         )
                                         .on_hover_text(if available {
                                             format!("Załaduj na dek {}", letter(deck))
@@ -4712,7 +5125,7 @@ impl Studio {
                                 egui::Button::new(
                                     RichText::new(letter(deck)).strong().color(*color),
                                 )
-                                .corner_radius(0)
+                                .corner_radius(prospekt_dj::theme::radius())
                                 .min_size(Vec2::new(55., 28.)),
                             )
                             .clicked()
@@ -4779,7 +5192,7 @@ impl Studio {
                             egui::Button::new(if playing { "■" } else { "▶" })
                                 .fill(Color32::from_rgb(20, 130, 35))
                                 .stroke(Stroke::NONE)
-                                .corner_radius(0)
+                                .corner_radius(prospekt_dj::theme::radius())
                                 .min_size(Vec2::new(24., 24.)),
                         )
                         .on_hover_text("Odsłuch utworu na wyjściu PHONES — bez ładowania na dek")
@@ -5085,7 +5498,7 @@ impl Studio {
                             egui::Frame::new()
                                 .fill(Color32::from_gray(26))
                                 .stroke(Stroke::new(1_f32, color))
-                                .corner_radius(0)
+                                .corner_radius(prospekt_dj::theme::radius())
                                 .inner_margin(egui::Margin::symmetric(6, 3))
                                 .show(ui, |ui| {
                                     ui.set_min_width(76.);
@@ -6088,7 +6501,7 @@ impl Studio {
                                             egui::Button::new(
                                                 RichText::new(letter(deck)).strong().color(*accent),
                                             )
-                                            .corner_radius(0)
+                                            .corner_radius(prospekt_dj::theme::radius())
                                             .min_size(Vec2::new(30., 22.)),
                                         )
                                         .clicked()
@@ -6187,7 +6600,7 @@ impl Studio {
                     egui::Button::new(RichText::new(text).size(11.).color(Color32::from_gray(190)))
                         .fill(Color32::from_rgb(15, 15, 15))
                         .stroke(Stroke::new(0.5_f32, Color32::BLACK))
-                        .corner_radius(0)
+                        .corner_radius(prospekt_dj::theme::radius())
                         .min_size(Vec2::ZERO)
                         .frame(true),
                 );
@@ -6267,7 +6680,8 @@ impl Studio {
                     } else {
                         fill
                     };
-                    ui.painter().rect_filled(rect, 0., fill);
+                    ui.painter()
+                        .rect_filled(rect, prospekt_dj::theme::radius_f(3.), fill);
                     if selected {
                         ui.painter().line_segment(
                             [rect.left_top(), rect.left_bottom()],
@@ -7320,10 +7734,11 @@ impl Studio {
                             ui.label(label);
                             let (rect, _) =
                                 ui.allocate_exact_size(Vec2::new(110., 26.), Sense::hover());
-                            ui.painter().rect_filled(rect, 0., color);
+                            ui.painter()
+                                .rect_filled(rect, prospekt_dj::theme::radius_f(3.), color);
                             ui.painter().rect_stroke(
                                 rect,
-                                0.,
+                                prospekt_dj::theme::radius_f(3.),
                                 Stroke::new(1_f32, Color32::GRAY),
                                 egui::StrokeKind::Inside,
                             );
@@ -7660,6 +8075,7 @@ impl Studio {
                 6=>{
                     ui.heading("Wygląd i wydajność");
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
+                    ui.horizontal(|ui|{ui.label("Skórka:");let before=self.settings.skin;egui::ComboBox::from_id_salt(("skin",ui.id())).selected_text(self.settings.skin.name()).show_ui(ui,|ui|{for (skin,name) in prospekt_dj::theme::Skin::ALL{ui.selectable_value(&mut self.settings.skin,skin,name);}});if before!=self.settings.skin{prospekt_dj::theme::set_skin(self.settings.skin);console_theme(ctx,self.settings.light);}});
                     ui.checkbox(&mut self.settings.reduced_motion,"Ogranicz animacje");
                     ui.add_enabled(!self.settings.reduced_motion, egui::Checkbox::new(&mut self.settings.blink_paused_play,"Miganie PLAY co pół sekundy, gdy utwór jest zatrzymany"));
                     ui.checkbox(&mut self.settings.show_statistics,"Statystyki systemowe");
@@ -7749,6 +8165,7 @@ impl Studio {
                     if self.settings.language != previous {i18n::set_language(&self.settings.language);}
                     ui.separator();ui.heading(tr("Wygląd"));
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
+                    ui.horizontal(|ui|{ui.label("Skórka:");let before=self.settings.skin;egui::ComboBox::from_id_salt(("skin",ui.id())).selected_text(self.settings.skin.name()).show_ui(ui,|ui|{for (skin,name) in prospekt_dj::theme::Skin::ALL{ui.selectable_value(&mut self.settings.skin,skin,name);}});if before!=self.settings.skin{prospekt_dj::theme::set_skin(self.settings.skin);console_theme(ctx,self.settings.light);}});
                     ui.label("Kolor wnętrza jogów");
                     egui::ComboBox::from_id_salt("jog-background")
                         .selected_text(if self.settings.white_jog { "Białe tło / czarny tekst" } else { "Czarne tło / jasny tekst" })
@@ -8451,6 +8868,7 @@ impl Studio {
                         "setcue" => self.deck(i, DeckControl::SetCue),
                         "sync" => self.sync(i),
                         "scratch" => self.deck(i, DeckControl::ScratchMode),
+                        "keylock" => self.deck(i, DeckControl::KeyLock),
                         "pfl" => self.send(Command::Deck(i, DeckControl::Pfl)),
                         "loopoff" => self.deck(i, DeckControl::LoopOff),
                         "load" => {
@@ -9033,11 +9451,14 @@ fn jog_action_button(
         } else {
             26
         };
-        ui.painter()
-            .rect_filled(rect, 0., Color32::from_gray(shade));
+        ui.painter().rect_filled(
+            rect,
+            prospekt_dj::theme::radius_f(3.),
+            Color32::from_gray(shade),
+        );
         ui.painter().rect_stroke(
             rect,
-            0.,
+            prospekt_dj::theme::radius_f(3.),
             Stroke::new(1_f32, Color32::from_gray(90)),
             egui::StrokeKind::Inside,
         );
@@ -9088,15 +9509,15 @@ fn transport_button(
             .animate_bool_with_time(response.id.with("transport-state"), active, 0.12)
     };
     let p = ui.painter();
-    p.rect_filled(rect, 0., Color32::BLACK);
+    p.rect_filled(rect, prospekt_dj::theme::radius_f(3.), Color32::BLACK);
     p.rect_filled(
         rect,
-        0.,
+        prospekt_dj::theme::radius_f(3.),
         color.gamma_multiply(0.08 + 0.25 * selected + 0.12 * hover),
     );
     p.rect_stroke(
         rect.shrink(0.5),
-        0.,
+        prospekt_dj::theme::radius_f(3.),
         Stroke::new(
             if response.is_pointer_button_down_on() {
                 2_f32
@@ -9204,10 +9625,11 @@ fn vertical_wave_control(
     } else {
         Color32::from_gray(20)
     };
-    ui.painter().rect_filled(rect, 0., color);
+    ui.painter()
+        .rect_filled(rect, prospekt_dj::theme::radius_f(3.), color);
     ui.painter().rect_stroke(
         rect,
-        0.,
+        prospekt_dj::theme::radius_f(3.),
         Stroke::new(
             1_f32,
             if active {
@@ -9339,11 +9761,17 @@ fn waveform(
         0.
     };
     let width = rect.width() as usize;
+    // Original skin anchors the grid at the CUE point, as before.
+    let grid_anchor = if prospekt_dj::theme::classic() {
+        deck.cue
+    } else {
+        track.beat_offset
+    };
     if span.is_some() && style.beat_background {
         let beat = 60. / deck.bpm.clamp(40., 300.);
-        let first = ((start - deck.cue) / beat).floor() as i64;
+        let first = ((start - grid_anchor) / beat).floor() as i64;
         for n in first..=first + (range / beat).ceil() as i64 {
-            let time = deck.cue + n as f64 * beat;
+            let time = grid_anchor + n as f64 * beat;
             let left = rect.left() + ((time - start) / range) as f32 * rect.width();
             let right = rect.left() + ((time + beat - start) / range) as f32 * rect.width();
             let bright = Color32::from_gray(if n.rem_euclid(2) == 0 { 30 } else { 18 });
@@ -9376,9 +9804,9 @@ fn waveform(
     }
     if span.is_some() && style.grid {
         let beat = 60. / deck.bpm.clamp(40., 300.);
-        let first = ((start - deck.cue) / beat).floor() as i64;
+        let first = ((start - grid_anchor) / beat).floor() as i64;
         for n in first..=first + (range / beat).ceil() as i64 + 1 {
-            let t = deck.cue + n as f64 * beat;
+            let t = grid_anchor + n as f64 * beat;
             if t < 0. || t >= duration || t < start || t > start + range {
                 continue;
             }
@@ -9595,4 +10023,8 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, color: Color32) {
 }
 fn short_time(seconds: f64) -> String {
     format!("{:02}:{:02}", (seconds / 60.) as u64, seconds as u64 % 60)
+}
+
+fn deck_letter(i: usize) -> char {
+    (b'A' + i.min(3) as u8) as char
 }

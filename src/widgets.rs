@@ -47,7 +47,21 @@ impl<'a> Knob<'a> {
 impl Widget for Knob<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         let (min, max) = (*self.range.start(), *self.range.end());
-        let width = self.size + 12.;
+        // Wide labels (e.g. PHONES, MASTER) must not run into neighbouring knobs.
+        let label_width = ui
+            .painter()
+            .layout_no_wrap(
+                self.label.to_owned(),
+                FontId::proportional(9.),
+                ui.visuals().text_color(),
+            )
+            .size()
+            .x;
+        let width = if prospekt_dj::theme::classic() {
+            self.size + 12.
+        } else {
+            (self.size + 12.).max(label_width + 4.)
+        };
         let compact = self.size <= 28.;
         let height = self.size + if compact { 15. } else { 28. };
         let (rect, mut response) =

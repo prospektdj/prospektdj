@@ -5,6 +5,9 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Default)]
 pub struct EmojiAtlas {
     pub hidden: bool,
+    /// 0 = full labels, 1 = small labels, 2 = icons only (labels with numbers stay).
+    /// Keeps the header from overflowing onto the clock on narrow windows.
+    pub compact: u8,
     textures: HashMap<String, (TextureHandle, u64)>,
     tick: u64,
 }
@@ -45,17 +48,22 @@ impl EmojiAtlas {
         icon: &str,
         label: impl Into<egui::WidgetText>,
     ) -> egui::Button<'static> {
-        let label = label.into();
+        let mut label = label.into();
+        let text = label.text().to_owned();
+        if self.compact >= 1 {
+            label = egui::RichText::new(&text).size(9.).into();
+        }
         if !self.hidden {
             if let Some(texture) = self.texture(ctx, icon) {
-                return egui::Button::image_and_text(
-                    egui::Image::new((texture.id(), Vec2::splat(16.))),
-                    label,
-                )
-                .corner_radius(0);
+                let image = egui::Image::new((texture.id(), Vec2::splat(16.)));
+                if self.compact >= 2 && !text.chars().any(|c| c.is_ascii_digit()) {
+                    return egui::Button::image(image).corner_radius(prospekt_dj::theme::radius());
+                }
+                return egui::Button::image_and_text(image, label)
+                    .corner_radius(prospekt_dj::theme::radius());
             }
         }
-        egui::Button::new(label).corner_radius(0)
+        egui::Button::new(label).corner_radius(prospekt_dj::theme::radius())
     }
     pub fn labeled_button(
         &mut self,
@@ -70,7 +78,7 @@ impl EmojiAtlas {
                         egui::Image::new((texture.id(), Vec2::splat(16.))),
                         label,
                     )
-                    .corner_radius(0),
+                    .corner_radius(prospekt_dj::theme::radius()),
                 );
             }
         }
