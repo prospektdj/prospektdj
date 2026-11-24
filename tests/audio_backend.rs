@@ -119,7 +119,7 @@ fn broken_alsa_default_recovers_to_bridge_and_renders() {
         return;
     }
     let (tx, rx) = crossbeam_channel::unbounded();
-    let (errors, _) = crossbeam_channel::bounded(8);
+    let (errors, error_rx) = crossbeam_channel::bounded(8);
     let view = Arc::new(Mutex::new(Snapshot::default()));
     let options = audio::Options {
         buffer_frames: Some(64),
@@ -141,7 +141,12 @@ fn broken_alsa_default_recovers_to_bridge_and_renders() {
         assert!(Instant::now() < deadline, "bridge callback stalled");
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert!(runtime.is_running());
+    // Show any stream errors reported during the run, so a failure says why.
+    let stream_errors: Vec<String> = error_rx.try_iter().collect();
+    assert!(
+        runtime.is_running(),
+        "stream stopped during bridge recovery: {stream_errors:?}"
+    );
 }
 
 #[test]
