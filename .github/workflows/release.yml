@@ -29,6 +29,8 @@ jobs:
             platform: windows-x86
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    # Linux x86 is not part of the requested release; its failure must not block the others.
+    continue-on-error: ${{ matrix.platform == 'linux-x86' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
