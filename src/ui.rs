@@ -214,12 +214,8 @@ fn storage_category(ui: &mut egui::Ui, label: &str, kind: usize, body: impl FnOn
 }
 /// Header label: the original text in the classic skin, a short form in the modern one
 /// so the whole top bar stays inside the window.
-fn header_label(long: &'static str, short: &'static str) -> &'static str {
-    if prospekt_dj::theme::classic() {
-        long
-    } else {
-        short
-    }
+fn header_label(_long: &'static str, short: &'static str) -> &'static str {
+    short
 }
 fn cue_color(n: usize) -> Color32 {
     let [r, g, b] = prospekt_dj::music_view::CUE_RGB[n];
@@ -1875,11 +1871,9 @@ impl Studio {
                                                 ),
                                             )
                                             .selected(
-                                                !prospekt_dj::theme::classic()
-                                                    && self
-                                                        .runtime
-                                                        .as_ref()
-                                                        .is_some_and(|r| r.is_running()),
+                                                self.runtime
+                                                    .as_ref()
+                                                    .is_some_and(|r| r.is_running()),
                                             ),
                                     )
                                     .clicked()
@@ -3455,26 +3449,12 @@ impl Studio {
         let response = ui
             .add_enabled(
                 !self.record_stopping,
-                (if prospekt_dj::theme::classic() {
-                    self.emoji.icon_button(
-                        ui.ctx(),
-                        "🔴",
-                        RichText::new(if self.record_stopping { "…" } else { "REC" })
-                            .family(egui::FontFamily::Name("Arial Bold".into()))
-                            .color(if recording {
-                                Color32::WHITE
-                            } else {
-                                Color32::from_rgb(255, 45, 55)
-                            }),
-                    )
+                // Red dot only, so the top bar fits on one row in every skin.
+                egui::Button::new(RichText::new("●").size(14.).color(if recording {
+                    Color32::WHITE
                 } else {
-                    // Modern skins: a red dot only, so the top bar fits on one row.
-                    egui::Button::new(RichText::new("●").size(14.).color(if recording {
-                        Color32::WHITE
-                    } else {
-                        Color32::from_rgb(255, 45, 55)
-                    }))
-                })
+                    Color32::from_rgb(255, 45, 55)
+                }))
                 .fill(if recording {
                     Color32::from_rgb(180, 20, 30)
                 } else {
