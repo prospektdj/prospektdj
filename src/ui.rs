@@ -3078,6 +3078,62 @@ impl Studio {
         if !prospekt_dj::theme::classic() {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.;
+                if ui
+                    .add_sized(
+                        [30., 16.],
+                        egui::Button::new(RichText::new("SLIP").size(8.)).selected(d.slip),
+                    )
+                    .on_hover_text("Slip: pętle i skoki nie przerywają odtwarzania")
+                    .clicked()
+                {
+                    self.deck(i, DeckControl::Slip);
+                }
+                if ui
+                    .add_sized(
+                        [30., 16.],
+                        egui::Button::new(RichText::new("BRK").size(8.)).selected(d.braking),
+                    )
+                    .on_hover_text("Brake: płyta zwalnia do zera jak gramofon")
+                    .clicked()
+                {
+                    self.deck(i, DeckControl::Brake);
+                }
+                if ui
+                    .add_sized(
+                        [30., 16.],
+                        egui::Button::new(RichText::new("QNT").size(8.)).selected(d.quantize),
+                    )
+                    .on_hover_text("Quantize: punkty Hot Cue wpadają na siatkę bitów")
+                    .clicked()
+                {
+                    self.deck(i, DeckControl::Quantize);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
+                for n in 0..4 {
+                    let filled = d.loop_slots[n].is_some();
+                    let response = ui
+                        .add_sized(
+                            [22., 16.],
+                            egui::Button::new(RichText::new(format!("L{}", n + 1)).size(8.))
+                                .selected(filled),
+                        )
+                        .on_hover_text(
+                            "Klik: odtwórz zapisaną pętlę · Shift+klik: zapisz aktualną pętlę (lub 4 takty)",
+                        );
+                    if response.clicked() {
+                        let shift = ui.input(|input| input.modifiers.shift);
+                        if shift {
+                            self.deck(i, DeckControl::CaptureLoop(n));
+                        } else {
+                            self.deck(i, DeckControl::RecallLoop(n));
+                        }
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
                 for (label, beats) in [("◀4", -4_f64), ("◀1", -1_f64), ("1▶", 1_f64), ("4▶", 4_f64)]
                 {
                     if ui

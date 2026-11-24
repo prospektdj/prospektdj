@@ -53,6 +53,14 @@ pub struct DeckView {
     /// Keep the original musical key while the tempo changes.
     pub key_lock: bool,
     pub mode: PadMode,
+    /// SLIP: the track keeps playing underneath loops, cues and jumps.
+    pub slip: bool,
+    /// Hot cues snap to the nearest beat of the grid.
+    pub quantize: bool,
+    /// BRAKE: the platter is slowing to a stop.
+    pub braking: bool,
+    /// Four session loop slots (Beat Lab style), filled with CAPTURE.
+    pub loop_slots: [Option<(f64, f64)>; 4],
 }
 impl Default for DeckView {
     fn default() -> Self {
@@ -77,6 +85,10 @@ impl Default for DeckView {
             scratch: false,
             key_lock: false,
             mode: PadMode::HotCue,
+            slip: false,
+            quantize: false,
+            braking: false,
+            loop_slots: [None; 4],
         }
     }
 }
@@ -153,6 +165,11 @@ pub enum DeckControl {
     Bend(f64),
     /// Jump by a number of beats (negative = back), using the track's BPM.
     BeatJump(f64),
+    Slip,
+    Quantize,
+    Brake,
+    CaptureLoop(usize),
+    RecallLoop(usize),
 }
 pub enum Command {
     DeckCount(usize),
@@ -206,6 +223,10 @@ struct Deck {
     performance: u64,
     counted: bool,
     amp: f32,
+    /// Where the track would be without SLIP's loops and jumps.
+    slip_virtual: f64,
+    /// Speed factor while braking: 1 at full speed, 0 when stopped.
+    brake: f32,
 }
 impl Deck {
     fn new(sample_rate: u32) -> Self {
@@ -225,6 +246,8 @@ impl Deck {
             performance: 0,
             counted: false,
             amp: 0.,
+            slip_virtual: 0.,
+            brake: 1.,
         }
     }
 }
@@ -566,6 +589,7 @@ impl Engine {
                     mode: d.view.mode,
                     scratch: d.view.scratch,
                     key_lock: d.view.key_lock,
+                    quantize: d.view.quantize,
                     ..Default::default()
                 };
                 d.frame = 0.;
@@ -591,6 +615,7 @@ impl Engine {
                     mode: d.view.mode,
                     scratch: d.view.scratch,
                     key_lock: d.view.key_lock,
+                    quantize: d.view.quantize,
                     ..Default::default()
                 };
                 d.shifter.reset();
@@ -621,7 +646,48 @@ impl Engine {
                     }
                 }
             }
+            DeckControl::Slip => {
+                if d.view.slip {
+                    d.view.slip = false;
+                    if let Some(t) = &d.view.track {
+                        d.frame = d.slip_virtual.clamp(0., t.frames.len() as f64);
+                    }
+                } else if d.view.track.is_some() {
+                    d.view.slip = true;
+                    d.slip_virtual = d.frame;
+                }
+            }
+            DeckControl::Quantize => d.view.quantize = !d.view.quantize,
+            DeckControl::Brake => {
+                if d.view.playing && d.view.track.is_some() {
+                    d.view.braking = true;
+                    d.brake = 1.;
+                }
+            }
+            DeckControl::CaptureLoop(n) if n < 4 => {
+                if let Some(t) = &d.view.track {
+                    let sr = t.sample_rate as f64;
+                    let range = d.view.loop_range.unwrap_or_else(|| {
+                        let start = d.frame / sr;
+                        let beat = 60. / sane_bpm(d.view.bpm);
+                        (start, (start + 4. * beat).min(t.duration()))
+                    });
+                    if range.1 - range.0 > 0.01 {
+                        d.view.loop_slots[n] = Some(range);
+                    }
+                }
+            }
+            DeckControl::RecallLoop(n) if n < 4 => {
+                if let (Some((a, b)), Some(t)) = (d.view.loop_slots[n], &d.view.track) {
+                    d.view.loop_range = Some((a, b));
+                    let sr = t.sample_rate as f64;
+                    if d.frame / sr < a || d.frame / sr >= b {
+                        d.frame = a * sr;
+                    }
+                }
+            }
             DeckControl::Play => {
+                d.view.braking = false;
                 if let Some(t) = &d.view.track {
                     if d.frame >= t.frames.len() as f64 {
                         d.frame = 0.;
@@ -728,7 +794,8 @@ impl Engine {
                         d.frame = cue * t.sample_rate as f64;
                         d.view.loop_range = None;
                     } else {
-                        d.view.hot[p] = Some(d.frame / t.sample_rate as f64);
+                        let seconds = snap_seconds(&d.view, t, d.frame / t.sample_rate as f64);
+                        d.view.hot[p] = Some(seconds);
                     }
                 }
             }
@@ -768,7 +835,8 @@ impl Engine {
                             d.frame = cue * t.sample_rate as f64;
                             d.view.loop_range = None;
                         } else {
-                            d.view.hot[p] = Some(pos);
+                            let seconds = snap_seconds(&d.view, t, pos);
+                            d.view.hot[p] = Some(seconds);
                         }
                     }
                     PadMode::AutoLoop => {
@@ -905,6 +973,15 @@ impl Engine {
             } else {
                 0.
             };
+            if d.view.braking {
+                d.brake = (d.brake - 1. / (1.5 * self.sample_rate as f32)).max(0.);
+                speed *= d.brake as f64;
+                if d.brake <= 0. {
+                    d.view.braking = false;
+                    d.view.playing = false;
+                    d.brake = 1.;
+                }
+            }
             if let Some((jog, left)) = &mut d.jog {
                 speed = *jog;
                 *left = left.saturating_sub(1);
@@ -1017,6 +1094,17 @@ impl Engine {
                 if d.jog.is_none() && !d.view.reverse {
                     d.view.playing = false;
                 }
+            }
+            if d.view.slip {
+                // The hidden playhead runs at the same speed, ignoring loops and cues.
+                let forward = if d.view.playing {
+                    d.view.rate * (1. + d.bend)
+                } else {
+                    0.
+                };
+                d.slip_virtual = (d.slip_virtual
+                    + forward * track.sample_rate as f64 / self.sample_rate as f64)
+                    .min(track.frames.len() as f64);
             }
             d.view.position = d.frame / track.sample_rate as f64;
         }
@@ -1177,6 +1265,16 @@ pub type CommandSender = Sender<Command>;
 pub const TEMPO_RANGES: [f64; 4] = [0.06, 0.10, 0.16, 0.50];
 pub fn tempo_range(index: u8) -> f64 {
     TEMPO_RANGES[(index as usize).min(TEMPO_RANGES.len() - 1)]
+}
+
+/// Snaps a time to the nearest beat of the track's grid when quantize is on.
+pub fn snap_seconds(view: &DeckView, track: &Track, seconds: f64) -> f64 {
+    if !view.quantize {
+        return seconds;
+    }
+    let beat = 60. / sane_bpm(view.bpm);
+    let offset = track.beat_offset;
+    (offset + ((seconds - offset) / beat).round() * beat).clamp(0., track.duration())
 }
 
 /// Track BPM from tags or detection may be missing; loops and samples divide by it.
