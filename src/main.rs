@@ -7,6 +7,14 @@ mod widgets;
 use prospekt_dj::settings;
 
 fn main() -> eframe::Result<()> {
+    if let Err(error) = prospekt_dj::portable::prepare() {
+        rfd::MessageDialog::new()
+            .set_title("Prospekt DJ — zapis danych")
+            .set_description(format!("{error:#}"))
+            .set_level(rfd::MessageLevel::Error)
+            .show();
+        return Ok(());
+    }
     let settings = settings::load();
     let pixels = image::load_from_memory(include_bytes!("../assets/icon.png"))
         .expect("embedded icon")
@@ -19,7 +27,7 @@ fn main() -> eframe::Result<()> {
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Prospekt DJ · pre-beta 0.0.1")
+            .with_title("Prospekt DJ · pre-alpha 0.0.1 test")
             .with_inner_size([settings.width, settings.height])
             .with_min_inner_size([1000., 720.])
             .with_icon(icon),

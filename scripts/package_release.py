@@ -11,7 +11,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--target', required=True)
-parser.add_argument('--platform', choices=['linux-x64', 'windows-x64', 'macos-arm64', 'macos-x64'], required=True)
+parser.add_argument('--platform', choices=['linux-x64', 'linux-x86', 'windows-x64', 'windows-x86', 'windows7-x64-experimental', 'windows7-x86-experimental', 'macos-arm64', 'macos-x64'], required=True)
 args = parser.parse_args()
 version = tomllib.loads((root / 'Cargo.toml').read_text())['package']['version']
 name = f'Prospekt-DJ-{version}-{args.platform}'
@@ -49,8 +49,10 @@ shutil.copy2(binary, destination)
 destination.chmod(0o755)
 for filename in ['README.md', 'LICENSE']:
     shutil.copy2(root / filename, stage / filename)
-for directory in ['docs', 'licenses']:
+for directory in ['docs', 'licenses', 'examples', 'controller-mapping', 'fonts', 'twemoji']:
     shutil.copytree(root / directory, stage / directory)
+if args.platform.startswith('windows7'):
+    (stage / 'WINDOWS7-EXPERIMENTAL.txt').write_text('PL: Nie przetestowano uruchomienia na Windows 7. Zaleznosci moga wymagac nowszego systemu.\nEN: Not runtime-tested on Windows 7. Dependencies may require a newer operating system.\n')
 if args.platform.startswith('macos'):
     subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True)
     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)

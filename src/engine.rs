@@ -18,13 +18,15 @@ pub enum PadMode {
     AutoLoop,
     ManualLoop,
     Sampler,
+    Effects,
 }
 impl PadMode {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::HotCue,
         Self::AutoLoop,
         Self::ManualLoop,
         Self::Sampler,
+        Self::Effects,
     ];
 }
 #[derive(Clone, Debug)]
@@ -86,6 +88,8 @@ pub struct Snapshot {
     pub peak: f32,
     pub samples: [Option<(Arc<Track>, f64, f64)>; 4],
     pub sample_playing: [bool; 4],
+    pub preview_playing: bool,
+    pub preview_position: f64,
     pub recording: bool,
     pub recorded_seconds: f64,
     pub database_failed: bool,
@@ -104,6 +108,8 @@ impl Default for Snapshot {
             peak: 0.,
             samples: std::array::from_fn(|_| None),
             sample_playing: [false; 4],
+            preview_playing: false,
+            preview_position: 0.,
             recording: false,
             recorded_seconds: 0.,
             database_failed: false,
@@ -154,7 +160,10 @@ pub enum Command {
     SampleLoad(usize, Arc<Track>),
     SampleTrigger(usize),
     SampleClear(usize),
+    Preview(Option<Arc<Track>>),
+    PreviewSeek(f64),
     Recording(Option<CaptureSink>),
+    Broadcast(Option<CaptureSink>),
     Fade {
         to: usize,
         seconds: f64,
@@ -231,7 +240,10 @@ pub struct Engine {
     sample_volume: f32,
     samples: [Option<Sample>; 4],
     voices: [Option<Voice>; 4],
+    preview: Option<(Arc<Track>, f64)>,
     capture: Option<CaptureSink>,
+    broadcast: Option<CaptureSink>,
+    broadcast_block: Block,
     block: Block,
     recorded: u64,
     limiter: f32,
@@ -262,7 +274,10 @@ impl Engine {
             sample_volume: 0.8,
             samples: std::array::from_fn(|_| None),
             voices: std::array::from_fn(|_| None),
+            preview: None,
             capture: None,
+            broadcast: None,
+            broadcast_block: Block::default(),
             block: Block::default(),
             recorded: 0,
             limiter: 1.,
@@ -373,6 +388,21 @@ impl Engine {
             Command::SampleClear(i) if i < 4 => {
                 self.samples[i] = None;
                 self.voices[i] = None;
+            }
+            Command::Broadcast(sink) => {
+                self.broadcast = sink;
+                self.broadcast_block.len = 0;
+            }
+            Command::Preview(track) => {
+                self.preview = track.map(|track| (track, 0.));
+            }
+            Command::PreviewSeek(seconds) => {
+                if seconds.is_finite() {
+                    if let Some((track, frame)) = &mut self.preview {
+                        *frame = (seconds * track.sample_rate as f64)
+                            .clamp(0., track.frames.len() as f64);
+                    }
+                }
             }
             Command::Recording(sink) => {
                 self.flush_capture();
@@ -820,8 +850,8 @@ impl Engine {
                         self.session_played.insert(path.clone());
                     }
                     if let Some(store) = &self.store {
-                        store.play(
-                            format!(
+                        store.play_details(crate::history::Play {
+                            event_id: format!(
                                 "{}-{}-{}-{}-{}",
                                 crate::track_store::session_start(),
                                 std::process::id(),
@@ -829,8 +859,13 @@ impl Engine {
                                 i,
                                 d.performance
                             ),
-                            track.id.clone(),
-                        );
+                            track_id: track.id.clone(),
+                            path: track.path.clone(),
+                            title: track.title.clone(),
+                            artist: track.artist.clone(),
+                            deck: i,
+                            played_at: String::new(),
+                        });
                     }
                 }
             }
@@ -918,10 +953,31 @@ impl Engine {
         for x in &mut out {
             *x = (*x * self.limiter).clamp(-0.98, 0.98);
         }
+        if let Some((track, position)) = &mut self.preview {
+            let frame = track.sample(*position);
+            for c in 0..2 {
+                phones[c] += frame[c] * self.phones;
+            }
+            *position += track.sample_rate as f64 / self.sample_rate as f64;
+            if *position >= track.frames.len() as f64 {
+                self.preview = None;
+            }
+        }
         for x in &mut phones {
             *x = x.clamp(-0.98, 0.98);
         }
         self.peak = (self.peak * 0.9998).max(out[0].abs().max(out[1].abs()));
+        if let Some(sink) = &self.broadcast {
+            self.broadcast_block.frames[self.broadcast_block.len] = out;
+            self.broadcast_block.len += 1;
+            if self.broadcast_block.len == BLOCK_SIZE {
+                if sink.sender.try_send(self.broadcast_block.clone()).is_err() {
+                    sink.overflow
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                self.broadcast_block.len = 0;
+            }
+        }
         if self.capture.is_some() {
             self.block.frames[self.block.len] = out;
             self.block.len += 1;
@@ -966,6 +1022,12 @@ impl Engine {
                     .map(|s| (s.track.clone(), s.start, s.end))
             }),
             sample_playing: std::array::from_fn(|i| self.voices[i].is_some()),
+            preview_playing: self.preview.is_some(),
+            preview_position: self
+                .preview
+                .as_ref()
+                .map(|(track, frame)| frame / track.sample_rate as f64)
+                .unwrap_or(0.),
             recording: self.capture.is_some(),
             recorded_seconds: self.recorded as f64 / self.sample_rate as f64,
             cue_revision: (self.instance, self.cue_revision),

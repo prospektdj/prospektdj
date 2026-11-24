@@ -21,7 +21,7 @@ pub enum Backend {
 impl Backend {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Asio => "ASIO (Windows)",
+            Self::Asio => "ASIO / ASIO4ALL (Windows)",
             Self::System if cfg!(target_os = "windows") => "WASAPI (Windows)",
             Self::System => "System / ALSA",
         }
@@ -43,10 +43,19 @@ fn host(backend: Backend) -> Result<cpal::Host> {
         Backend::Asio => bail!("ASIO is available only in the Windows build"),
     }
 }
-fn device_name(d: &cpal::Device) -> String {
+pub(crate) fn device_name(d: &cpal::Device) -> String {
     d.description()
-        .map(|d| d.name().to_owned())
+        .map(|description| {
+            #[cfg(target_os = "linux")]
+            if let Some(pcm) = description.driver() {
+                return pcm.to_owned();
+            }
+            description.name().to_owned()
+        })
         .unwrap_or_else(|_| "Unknown device".into())
+}
+pub(crate) fn device_matches(device: &cpal::Device, saved: &str) -> bool {
+    device_name(device) == saved || device.description().is_ok_and(|d| d.name() == saved)
 }
 pub fn output_names_for(backend: Backend) -> Result<Vec<String>> {
     #[cfg(target_os = "windows")]
@@ -61,6 +70,11 @@ pub fn output_names_for(backend: Backend) -> Result<Vec<String>> {
     names.dedup();
     Ok(names)
 }
+/// Match registered driver names without depending on a particular ASIO4ALL version.
+pub fn is_asio4all(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("asio4all")
+}
+
 pub fn output_names() -> Vec<String> {
     output_names_for(Backend::System).unwrap_or_default()
 }
@@ -152,6 +166,30 @@ pub struct AudioRuntime {
     callback_frames: Arc<AtomicU32>,
 }
 impl AudioRuntime {
+    /// Opens the currently loaded driver's panel on the UI thread without loading
+    /// another ASIO driver or interrupting the engine's stream ownership.
+    pub fn open_asio_panel(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.backend == Backend::Asio && self.is_running(),
+            "Najpierw uruchom wyjście ASIO z wybranym sterownikiem."
+        );
+        #[cfg(target_os = "windows")]
+        {
+            unsafe extern "C" {
+                fn ASIOControlPanel() -> i32;
+            }
+            // SAFETY: this runtime owns the active ASIO stream, which keeps the
+            // SDK's current driver loaded for the duration of the synchronous call.
+            let result = unsafe { ASIOControlPanel() };
+            anyhow::ensure!(
+                result == 0 || result == 0x3f4847a0,
+                "Sterownik nie otworzył panelu ASIO (kod {result})."
+            );
+            Ok(())
+        }
+        #[cfg(not(target_os = "windows"))]
+        bail!("Panel ASIO jest dostępny tylko w systemie Windows.")
+    }
     pub fn is_running(&self) -> bool {
         self.healthy.load(Ordering::Relaxed)
     }
@@ -167,7 +205,7 @@ impl AudioRuntime {
         }
     }
     pub fn diagnostics(&self) -> String {
-        format!("Prospekt DJ {} PRE-BETA\nBackend: {}\nMASTER device: {}\nFormat: {:?}; {} Hz; {} output channels\nRequested buffer: {:?}\n{}\nMASTER channels: {}–{}\nPFL pair: {:?}\nWarnings:\n{}\n",env!("CARGO_PKG_VERSION"),self.backend.label(),self.device_name,self.format,self.sample_rate,self.channels,self.requested_buffer,self.buffer_description(),self.routing.master as u32+1,self.routing.master as u32+2,self.routing.cue.map(|n|format!("{}–{}",n as u32+1,n as u32+2)),self.warnings.join("\n"))
+        format!("Prospekt DJ {} PRE-ALPHA TEST\nBackend: {}\nMASTER device: {}\nFormat: {:?}; {} Hz; {} output channels\nRequested buffer: {:?}\n{}\nMASTER channels: {}–{}\nPFL pair: {:?}\nWarnings:\n{}\n",env!("CARGO_PKG_VERSION"),self.backend.label(),self.device_name,self.format,self.sample_rate,self.channels,self.requested_buffer,self.buffer_description(),self.routing.master as u32+1,self.routing.master as u32+2,self.routing.cue.map(|n|format!("{}–{}",n as u32+1,n as u32+2)),self.warnings.join("\n"))
     }
 }
 pub fn diagnostic_path() -> std::path::PathBuf {
@@ -211,14 +249,110 @@ pub fn start_with_options(
     errors: Sender<String>,
     options: &Options,
 ) -> Result<AudioRuntime> {
+    let first = start_device_with_options(rx.clone(), view.clone(), errors.clone(), options);
+    #[cfg(target_os = "linux")]
+    if let Err(original) = first {
+        let mut failures = vec![format!("{original:#}")];
+        if options.backend != Backend::System {
+            return Err(original);
+        }
+        let candidates = linux_bridge_candidates(output_names());
+        for name in candidates {
+            if name == options.master_name && options.buffer_frames.is_none() {
+                continue;
+            }
+            let retry = Options {
+                master_name: name.clone(),
+                buffer_frames: None,
+                ..options.clone()
+            };
+            match start_device_with_options(rx.clone(), view.clone(), errors.clone(), &retry) {
+                Ok(mut runtime) => {
+                    runtime.warnings.push(format!("ALSA default failed; recovered using Linux audio bridge '{name}' with driver buffer."));
+                    if !options.master_name.is_empty() {
+                        runtime.warnings.push(format!(
+                            "Saved MASTER '{}' could not be opened; using '{name}'",
+                            options.master_name
+                        ));
+                    }
+                    runtime
+                        .warnings
+                        .push(format!("Original audio failure: {original:#}"));
+                    return Ok(runtime);
+                }
+                Err(error) => failures.push(format!("{name}: {error:#}")),
+            }
+        }
+        bail!("{}\nLinux / Chromebook container: verify that PulseAudio is reachable and ALSA's pulse plugin is installed (Debian: libasound2-plugins). Try MASTER 'pulse' in Audio settings. Do not select hardware hw:* devices in a container.\n", failures.join(" | "));
+    } else {
+        first
+    }
+    #[cfg(not(target_os = "linux"))]
+    first
+}
+/// Only known system bridges: never silently select an unrelated hardware or null device.
+pub fn linux_bridge_candidates(mut names: Vec<String>) -> Vec<String> {
+    names.retain(|name| {
+        matches!(
+            name.trim().to_ascii_lowercase().as_str(),
+            "pulse" | "pipewire" | "default"
+        )
+    });
+    names.sort_by_key(|name| match name.trim().to_ascii_lowercase().as_str() {
+        "pulse" => 0,
+        "pipewire" => 1,
+        _ => 2,
+    });
+    names.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    names
+}
+
+/// Ordered, distinct supported rates; a rejected 48 kHz stream must not hide
+/// a working 44.1 kHz configuration in the same ALSA range.
+pub fn sample_rate_attempts(min: u32, max: u32) -> Vec<u32> {
+    if min == 0 || min > max {
+        return Vec::new();
+    }
+    let mut rates = Vec::new();
+    for rate in [48000, 44100, min, max] {
+        if (min..=max).contains(&rate) && !rates.contains(&rate) {
+            rates.push(rate);
+        }
+    }
+    rates
+}
+fn default_output(host: &cpal::Host) -> Option<cpal::Device> {
+    if let Some(device) = host.default_output_device() {
+        return Some(device);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Enumeration may put ALSA's silent null PCM first on virtual machines.
+        // Only choose an explicitly recognised system bridge automatically.
+        for name in linux_bridge_candidates(output_names()) {
+            if let Some(device) = host.output_devices().ok()?.find(|d| device_name(d) == name) {
+                return Some(device);
+            }
+        }
+        None
+    }
+    #[cfg(not(target_os = "linux"))]
+    host.output_devices().ok()?.next()
+}
+fn start_device_with_options(
+    rx: Receiver<Command>,
+    view: Arc<Mutex<Snapshot>>,
+    errors: Sender<String>,
+    options: &Options,
+) -> Result<AudioRuntime> {
     let host = host(options.backend)?;
     let mut warnings = vec![];
     let output = if options.master_name.is_empty() {
-        host.default_output_device().or_else(||host.output_devices().ok()?.next()).context(if options.backend==Backend::Asio{"No ASIO output driver. Install the manufacturer's 64-bit ASIO driver, reconnect the interface and refresh devices."}else{"No active output. Enable speakers/headphones in Windows Sound settings and reconnect the device."})?
+        default_output(&host).context(if options.backend==Backend::Asio{"No ASIO output driver. Install an ASIO driver matching the app architecture (ASIO4ALL for Realtek, or the interface manufacturer's driver), then refresh devices."}else{"No active output. Check the system audio service, speakers/headphones and container audio bridge."})?
     } else {
         match host
             .output_devices()?
-            .find(|d| device_name(d) == options.master_name)
+            .find(|d| device_matches(d, &options.master_name))
         {
             Some(d) => d,
             None if options.backend == Backend::System => {
@@ -226,12 +360,11 @@ pub fn start_with_options(
                     "Saved MASTER '{}' unavailable; using the active system default",
                     options.master_name
                 ));
-                host.default_output_device()
-                    .or_else(|| host.output_devices().ok()?.next())
+                default_output(&host)
                     .context("Saved output and system default are unavailable")?
             }
             None => bail!(
-                "ASIO driver '{}' not available. Select an installed 64-bit driver in Settings.",
+                "ASIO driver '{}' not available. Select an installed driver matching the app architecture (ASIO4ALL or the interface driver) in Settings.",
                 options.master_name
             ),
         }
@@ -248,7 +381,8 @@ pub fn start_with_options(
     let mut candidates = vec![];
     let mut failures = vec![];
     match output.default_output_config() {
-        Ok(config) => candidates.push(config),
+        Ok(config) if config.channels() > 0 && config.sample_rate() > 0 => candidates.push(config),
+        Ok(_) => failures.push("default configuration has zero channels or sample rate".into()),
         Err(e) => failures.push(format!("default configuration: {e}")),
     }
     if let Ok(ranges) = output.supported_output_configs() {
@@ -260,11 +394,8 @@ pub fn start_with_options(
             {
                 continue;
             }
-            for rate in [48000, 44100, range.min_sample_rate()] {
-                if rate >= range.min_sample_rate() && rate <= range.max_sample_rate() {
-                    extra.push(range.with_sample_rate(rate));
-                    break;
-                }
+            for rate in sample_rate_attempts(range.min_sample_rate(), range.max_sample_rate()) {
+                extra.push(range.with_sample_rate(rate));
             }
         }
         extra.sort_by_key(|c| {
@@ -450,11 +581,11 @@ fn start_configuration(
     // Open optional monitoring only after the primary stream is working.
     let cue = if options.backend == Backend::System && !options.cue_name.is_empty() {
         let result = (|| -> Result<cpal::Stream> {
-            anyhow::ensure!(options.cue_name!=device_name(output),"MASTER and PFL refer to the same output. Use another device or ASIO channel-pair routing.");
+            anyhow::ensure!(!device_matches(output, &options.cue_name),"MASTER and PFL refer to the same output. Use another device or ASIO channel-pair routing.");
             let host = host(Backend::System)?;
             let device = host
                 .output_devices()?
-                .find(|d| device_name(d) == options.cue_name)
+                .find(|d| device_matches(d, &options.cue_name))
                 .context("PFL output unavailable")?;
             cue_stream(&device, cue_rx, config.sample_rate, errors.clone())
         })();

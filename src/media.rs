@@ -393,7 +393,7 @@ pub fn demo(deck: usize) -> Arc<Track> {
         .collect();
     Arc::new(Track::from_frames(
         format!(
-            "DEMO / {} · 120 BPM",
+            "DEMO / {}",
             if deck == 0 { "Pulse A" } else { "Bassline B" }
         ),
         frames,

@@ -86,6 +86,8 @@ struct Job {
 }
 enum Task {
     Lookup(Job),
+    Reload(Job),
+    Download(Job),
     Manual(Job, PathBuf),
     Reject(Job),
     Clear,
@@ -191,6 +193,14 @@ impl Artwork {
                 .insert(key, Instant::now() + Duration::from_secs(90));
         }
     }
+    pub fn reload(&mut self, e: &Entry) -> bool {
+        let job = self.job(e, false);
+        self.submit(Task::Reload(job), identity(e))
+    }
+    pub fn download(&mut self, e: &Entry) -> bool {
+        let job = self.job(e, true);
+        self.submit(Task::Download(job), identity(e))
+    }
     pub fn force(&mut self, e: &Entry) -> bool {
         let job = self.job(e, true);
         self.submit(Task::Lookup(job), identity(e))
@@ -261,6 +271,50 @@ impl LocalWorker {
                 self.versions.clear();
             }
             Task::Lookup(job) => self.lookup(job),
+            Task::Reload(job) => {
+                self.versions.remove(&job.key);
+                if let Some(image) = embedded(&job.entry.path) {
+                    publish(
+                        &self.out,
+                        &job,
+                        Some(image),
+                        "Embedded",
+                        Duration::from_secs(86400),
+                    );
+                } else if let Some((image, rec)) = cached(&self.root, &format!("t-{}", job.key))
+                    .or_else(|| cached(&self.root, &query_key(&job.entry)))
+                {
+                    publish(
+                        &self.out,
+                        &job,
+                        image,
+                        &rec.source,
+                        Duration::from_secs(86400),
+                    );
+                } else {
+                    publish(
+                        &self.out,
+                        &job,
+                        None,
+                        "No local artwork",
+                        Duration::from_secs(60),
+                    );
+                }
+            }
+            Task::Download(job) => {
+                self.versions.insert(job.key.clone(), job.token);
+                if let Err(error) = self.net.try_send(job) {
+                    let job = error.into_inner();
+                    self.versions.remove(&job.key);
+                    publish(
+                        &self.out,
+                        &job,
+                        None,
+                        "Artwork queue busy",
+                        Duration::from_secs(3),
+                    );
+                }
+            }
             Task::Reject(job) => {
                 self.versions.remove(&job.key);
                 let rec = Record {

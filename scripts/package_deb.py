@@ -8,6 +8,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
+parser.add_argument('--arch', choices=['amd64', 'i386'], default='amd64')
 parser.add_argument('--binary', type=Path, required=True)
 args = parser.parse_args()
 version = tomllib.loads((root / 'Cargo.toml').read_text())['package']['version']
@@ -39,8 +40,8 @@ width, height = struct.unpack('>II', icon.read_bytes()[16:24])
 shutil.copy2(icon, directory(f'usr/share/icons/hicolor/{width}x{height}/apps') / 'prospekt-dj.png')
 (directory('usr/share/applications') / 'prospekt-dj.desktop').write_text('''[Desktop Entry]
 Type=Application
-Name=Prospekt DJ PRE-BETA
-Comment=Open source DJ studio — PRE-BETA
+Name=Prospekt DJ PRE-ALPHA TEST
+Comment=Open source DJ studio — PRE-ALPHA TEST
 Exec=prospekt-dj
 Icon=prospekt-dj
 Terminal=false
@@ -52,19 +53,19 @@ size = sum(p.stat().st_size for p in stage.rglob('*') if p.is_file())
 Version: {version.replace("-", "~", 1)}
 Section: sound
 Priority: optional
-Architecture: amd64
+Architecture: {args.arch}
 Maintainer: Prospekt DJ <prospektdj@users.noreply.github.com>
 Installed-Size: {(size + 1023) // 1024}
-Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libx11-6, libxkbcommon0, libxkbcommon-x11-0, libgl1, xdg-utils, xdg-desktop-portal
+Depends: libc6 (>= 2.35), libgcc-s1, libasound2 | libasound2t64, libasound2-plugins, libx11-6, libxkbcommon0, libxkbcommon-x11-0, libgl1, xdg-utils, xdg-desktop-portal
 Recommends: ffmpeg
 Homepage: https://github.com/prospektdj/prospektdj
-Description: PRE-BETA open source DJ studio written in Rust
+Description: PRE-ALPHA TEST open source DJ studio written in Rust
  Two decks, RGB waveforms, effects, sampler, music library,
  MIDI mapping, automix and mix recording.
 ''')
 for path in stage.rglob('*'):
     path.chmod(0o755 if path.is_dir() or path == binary else 0o644)
-archive = out / f'prospekt-dj_{version}_amd64.deb'
+archive = out / f'prospekt-dj_{version}_{args.arch}.deb'
 subprocess.run(['dpkg-deb', '--root-owner-group', '--build', str(stage), str(archive)], check=True)
 subprocess.run(['dpkg-deb', '--info', str(archive)], check=True)
 print(archive)

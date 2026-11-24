@@ -1,9 +1,28 @@
+# Build / Kompilacja
 /target/
 /dist/
-/test-output/
-*.tmp
-
 /release-dist/
-
 /release-tools/
 /squashfs-root/
+/test-output/
+*.tmp
+*.part
+# Portable runtime data / Dane użytkownika wersji przenośnej
+/settings.json
+/library.json
+/tracks.sqlite*
+/covers/
+/history/
+/recommendations/
+/CLOUD/
+/SAMPLER/
+/audio-diagnostics.txt
+/last-import-report.json
+/.prospekt-portable-migrated
+# Local secrets / Lokalne dane OAuth
+/client_secret*.json
+/oauth-client*.json
+
+# Python cache / Pamiec podreczna Python
+__pycache__/
+*.pyc

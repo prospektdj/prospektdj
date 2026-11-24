@@ -39,6 +39,43 @@ impl EmojiAtlas {
         self.textures.insert(key, (texture.clone(), self.tick));
         Some(texture)
     }
+    pub fn icon_button(
+        &mut self,
+        ctx: &egui::Context,
+        icon: &str,
+        label: impl Into<egui::WidgetText>,
+    ) -> egui::Button<'static> {
+        let label = label.into();
+        if !self.hidden {
+            if let Some(texture) = self.texture(ctx, icon) {
+                return egui::Button::image_and_text(
+                    egui::Image::new((texture.id(), Vec2::splat(16.))),
+                    label,
+                )
+                .corner_radius(0);
+            }
+        }
+        egui::Button::new(label).corner_radius(0)
+    }
+    pub fn labeled_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        emoji: &str,
+        label: &str,
+    ) -> egui::Response {
+        if !self.hidden {
+            if let Some(texture) = self.texture(ui.ctx(), emoji) {
+                return ui.add(
+                    egui::Button::image_and_text(
+                        egui::Image::new((texture.id(), Vec2::splat(16.))),
+                        label,
+                    )
+                    .corner_radius(0),
+                );
+            }
+        }
+        ui.button(label)
+    }
     pub fn button(&mut self, ui: &mut egui::Ui, text: &str) -> egui::Response {
         let response = if self.hidden {
             ui.add_enabled(false, egui::Button::new("—"))

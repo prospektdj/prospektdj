@@ -1,9 +1,9 @@
 [package]
 name = "prospekt-dj"
-version = "0.0.1-prebeta"
+version = "0.0.1-prealpha-test"
 edition = "2021"
 rust-version = "1.89"
-description = "PRE-BETA open source DJ studio for Windows and Linux"
+description = "PRE-ALPHA TEST open source DJ studio for Windows and Linux"
 license = "AGPL-3.0-or-later"
 
 [dependencies]

@@ -1,12 +1,42 @@
 use crate::{midi::Mapping, recording::Format};
 use anyhow::{Context, Result};
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Typeface {
+    #[default]
+    Helvetica,
+    SegoeUi,
+    Arial,
+    NimbusSans,
+}
+impl Typeface {
+    pub const ALL: [Self; 4] = [
+        Self::Helvetica,
+        Self::SegoeUi,
+        Self::Arial,
+        Self::NimbusSans,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Helvetica => "Helvetica",
+            Self::SegoeUi => "Segoe UI",
+            Self::Arial => "Arial",
+            Self::NimbusSans => "Nimbus Sans",
+        }
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub interface_font: Typeface,
+    pub numeric_font: Typeface,
+    pub heading_font: Typeface,
+    pub broadcast: crate::broadcast::Config,
     pub effects: Vec<crate::effects::FxSettings>,
     pub library_sort: crate::library::Sort,
     pub library_descending: bool,
@@ -19,11 +49,20 @@ pub struct Settings {
     pub refresh_hz: u32,
     pub show_statistics: bool,
     pub cover_strip: bool,
+    pub cover_reflections: bool,
+    pub library_clock_expanded: bool,
+    pub show_library_clock: bool,
+    pub show_main_waveforms: bool,
+    pub library_folders_collapsed: bool,
+    pub library_info_collapsed: bool,
     pub banger_site_name: bool,
+    pub banger_site_display_font: bool,
     pub cover_scroll_animation: bool,
     pub track_preview: bool,
     pub preview_column: bool,
     pub live_recommendations: bool,
+    pub save_recommendation_history: bool,
+    pub recommendation_interval_seconds: u32,
     pub history_threshold: f64,
     pub import_prompt_seen: bool,
     pub auto_cover_download: bool,
@@ -34,10 +73,10 @@ pub struct Settings {
     pub dock_tab: usize,
     pub light: bool,
     pub white_jog: bool,
+    pub waveform_master: [bool; 4],
     pub deck_count: usize,
     pub language: String,
     pub logo_font: Option<PathBuf>,
-    pub graphic_logo: bool,
     pub controller_profiles: Vec<crate::midi::ControllerProfile>,
     pub controller_profile: Option<usize>,
     pub controller_profile_source: String,
@@ -59,14 +98,21 @@ pub struct Settings {
     pub auto_repeat: bool,
     pub linear_fade: bool,
     pub favorites: BTreeSet<PathBuf>,
+    pub favorite_folders: BTreeSet<PathBuf>,
+    pub folder_colors: BTreeMap<PathBuf, usize>,
     pub library: Vec<PathBuf>,
     pub midi: Vec<Mapping>,
+    pub midi_second: Vec<Mapping>,
     pub width: f32,
     pub height: f32,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            interface_font: Default::default(),
+            numeric_font: Default::default(),
+            heading_font: Default::default(),
+            broadcast: Default::default(),
             effects: vec![crate::effects::FxSettings::default(); 4],
             library_sort: crate::library::Sort::Title,
             library_descending: false,
@@ -79,11 +125,20 @@ impl Default for Settings {
             refresh_hz: 30,
             show_statistics: true,
             cover_strip: true,
+            cover_reflections: true,
+            library_clock_expanded: true,
+            show_library_clock: true,
+            show_main_waveforms: true,
+            library_folders_collapsed: false,
+            library_info_collapsed: false,
             banger_site_name: true,
+            banger_site_display_font: true,
             cover_scroll_animation: true,
             track_preview: true,
             preview_column: true,
             live_recommendations: true,
+            save_recommendation_history: true,
+            recommendation_interval_seconds: 60,
             history_threshold: 30.,
             import_prompt_seen: false,
             auto_cover_download: true,
@@ -94,10 +149,10 @@ impl Default for Settings {
             dock_tab: 0,
             light: false,
             white_jog: false,
+            waveform_master: [true, false, false, false],
             deck_count: 2,
             language: "pl".into(),
             logo_font: None,
-            graphic_logo: true,
             controller_profiles: Vec::new(),
             controller_profile: None,
             controller_profile_source: String::new(),
@@ -119,20 +174,20 @@ impl Default for Settings {
             auto_repeat: false,
             linear_fade: false,
             favorites: BTreeSet::new(),
+            favorite_folders: BTreeSet::new(),
+            folder_colors: BTreeMap::new(),
             library: Vec::new(),
             midi: Vec::new(),
+            midi_second: Vec::new(),
             width: 1440.,
             height: 940.,
         }
     }
 }
 pub fn config_path() -> PathBuf {
-    if let Some(root) = std::env::var_os("PROSPEKT_CONFIG_DIR") {
-        return PathBuf::from(root).join("settings.json");
-    }
-    ProjectDirs::from("org", "Prospekt", "Prospekt DJ Rust")
-        .map(|p| p.config_dir().join("settings.json"))
-        .unwrap_or_else(|| PathBuf::from("prospekt-settings.json"))
+    crate::portable::root()
+        .expect("Cannot locate application data folder")
+        .join("settings.json")
 }
 pub fn load() -> Settings {
     let mut s: Settings = std::fs::read(config_path())
@@ -154,6 +209,8 @@ pub fn load() -> Settings {
     } else {
         0.
     };
+    s.recommendation_interval_seconds = s.recommendation_interval_seconds.clamp(1, 3600);
+    s.folder_colors.retain(|_, color| *color < 8);
     s.width = s.width.clamp(1000., 3840.);
     s.height = s.height.clamp(720., 2160.);
     // Retire the old Samples/Mixer tabs without reopening a different panel.

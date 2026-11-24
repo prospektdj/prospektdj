@@ -1,43 +1,52 @@
-//! Original grapefruit-pink brand artwork. UV bounds remove only blank display margins.
-use egui::{ColorImage, Context, Rect, TextureHandle, TextureOptions};
+//! Original Prospekt P icons in pink, blue and green.
+use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 pub struct Brand {
-    pub texture: TextureHandle,
-    pub uv: Rect,
-    pub aspect: f32,
+    pub icon: TextureHandle,
+    pub blue: TextureHandle,
+    pub green: TextureHandle,
+    pub drive: TextureHandle,
 }
 impl Brand {
     pub fn load(ctx: &Context) -> Self {
-        let image = image::load_from_memory(include_bytes!("../assets/logo.png"))
-            .expect("embedded brand logo")
-            .thumbnail(1536, 512)
+        let icon_image = image::load_from_memory(include_bytes!("../assets/icon.png"))
+            .expect("embedded brand icon")
             .into_rgba8();
-        let (w, h) = image.dimensions();
-        let (mut left, mut top, mut right, mut bottom) = (w, h, 0, 0);
-        for (x, y, p) in image.enumerate_pixels() {
-            if p[3] > 0 && p[0].max(p[1]).max(p[2]) > 40 {
-                left = left.min(x);
-                top = top.min(y);
-                right = right.max(x);
-                bottom = bottom.max(y);
-            }
-        }
-        let uv = Rect::from_min_max(
-            egui::pos2(left as f32 / w as f32, top as f32 / h as f32),
-            egui::pos2(
-                (right + 1) as f32 / w as f32,
-                (bottom + 1) as f32 / h as f32,
+        let icon = ctx.load_texture(
+            "prospekt-watermark-icon",
+            ColorImage::from_rgba_unmultiplied(
+                [icon_image.width() as usize, icon_image.height() as usize],
+                icon_image.as_raw(),
             ),
-        );
-        let aspect = (right - left + 1) as f32 / (bottom - top + 1).max(1) as f32;
-        let texture = ctx.load_texture(
-            "prospekt-brand-grapefruit",
-            ColorImage::from_rgba_unmultiplied([w as usize, h as usize], image.as_raw()),
             TextureOptions::LINEAR,
         );
+        let variant = |name, bytes: &[u8]| {
+            let image = image::load_from_memory(bytes)
+                .expect("embedded icon variant")
+                .thumbnail(512, 512)
+                .into_rgba8();
+            ctx.load_texture(
+                name,
+                ColorImage::from_rgba_unmultiplied(
+                    [image.width() as usize, image.height() as usize],
+                    image.as_raw(),
+                ),
+                TextureOptions::LINEAR,
+            )
+        };
         Self {
-            texture,
-            uv,
-            aspect,
+            icon,
+            blue: variant(
+                "prospekt-icon-blue",
+                include_bytes!("../assets/icon-blue.png"),
+            ),
+            green: variant(
+                "prospekt-icon-green",
+                include_bytes!("../assets/icon-green.png"),
+            ),
+            drive: variant(
+                "google-drive-product-icon",
+                include_bytes!("../assets/google-drive.png"),
+            ),
         }
     }
 }

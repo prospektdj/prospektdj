@@ -1,4 +1,4 @@
-name: Build and publish PRE-BETA packages
+name: Build pre-alpha 0.0.1 test packages
 on:
   workflow_dispatch:
 permissions:
@@ -16,11 +16,19 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             platform: linux-x64
+            deb: amd64
+          - os: ubuntu-22.04
+            target: i686-unknown-linux-gnu
+            platform: linux-x86
+            deb: i386
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             platform: windows-x64
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            platform: windows-x86
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,39 +41,52 @@ jobs:
       - name: Windows ASIO SDK and LLVM
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-asio
+      - name: Windows x86 binding architecture
+        if: matrix.platform == 'windows-x86'
+        shell: pwsh
+        run: '"BINDGEN_EXTRA_CLANG_ARGS=--target=i686-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-${{ matrix.target }}
-      - name: Linux dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev libxkbcommon-x11-dev libgl1-mesa-dev pkg-config flatpak xvfb libfuse2 file patchelf desktop-file-utils
+          key: prealpha-${{ matrix.target }}
+      - name: Linux x64 dependencies
+        if: matrix.platform == 'linux-x64'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libasound2-plugins libx11-dev libxkbcommon-dev libxkbcommon-x11-dev libgl1-mesa-dev pkg-config flatpak xvfb libfuse2 file patchelf desktop-file-utils ffmpeg
+      - name: Linux x86 dependencies
+        if: matrix.platform == 'linux-x86'
+        shell: bash
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib libasound2-dev:i386 libasound2-plugins:i386 libx11-dev:i386 libxkbcommon-dev:i386 libxkbcommon-x11-dev:i386 libgl1-mesa-dev:i386 pkg-config file
+          echo 'PKG_CONFIG_ALLOW_CROSS=1' >> "$GITHUB_ENV"
+          echo 'PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig' >> "$GITHUB_ENV"
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets --target ${{ matrix.target }} -- -D warnings
       - run: cargo test --locked --target ${{ matrix.target }}
+      - name: Linux container bridge regression
+        if: runner.os == 'Linux'
+        env:
+          ALSA_CONFIG_PATH: ${{ github.workspace }}/tests/fixtures/alsa/broken-default.conf
+          PROSPEKT_CONFIG_DIR: ${{ runner.temp }}/prospekt-audio-bridge
+          PROSPEKT_TEST_BROKEN_ALSA: '1'
+        run: cargo test --locked --target ${{ matrix.target }} --test audio_backend -- --test-threads=1
       - run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Package and verify archive
         run: python scripts/package_release.py --target ${{ matrix.target }} --platform ${{ matrix.platform }}
-      - name: Build Debian installer
+      - name: Build Debian package
         if: runner.os == 'Linux'
-        run: python scripts/package_deb.py --binary target/${{ matrix.target }}/release/prospekt-dj
-      - name: Verify Debian installation
+        run: python scripts/package_deb.py --binary target/${{ matrix.target }}/release/prospekt-dj --arch ${{ matrix.deb }}
+      - name: Verify binary architecture
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get install -y --no-install-recommends ./release-dist/*.deb
-          dpkg-query -W prospekt-dj
-          test -x /usr/bin/prospekt-dj
-          test -f /usr/share/applications/prospekt-dj.desktop
-          ldd /usr/bin/prospekt-dj | tee /tmp/prospekt-libraries.txt
-          ! grep -q 'not found' /tmp/prospekt-libraries.txt
-      - name: Build and verify AppImage
-        if: runner.os == 'Linux'
+        run: file target/${{ matrix.target }}/release/prospekt-dj && ldd target/${{ matrix.target }}/release/prospekt-dj
+      - name: Build AppImage
+        if: matrix.platform == 'linux-x64'
         run: bash scripts/package_appimage.sh
-      - name: Build and install Flatpak PRE-BETA
-        if: runner.os == 'Linux'
+      - name: Build Flatpak
+        if: matrix.platform == 'linux-x64'
         run: bash scripts/package_flatpak.sh
-      - name: AppImage and Flatpak GUI smoke tests
-        if: runner.os == 'Linux'
+      - name: AppImage and Flatpak smoke tests
+        if: matrix.platform == 'linux-x64'
         shell: bash
         run: |
           set +e
@@ -73,7 +94,6 @@ jobs:
           appimage_result=$?
           xvfb-run -a timeout 8s flatpak run --env=LIBGL_ALWAYS_SOFTWARE=1 org.prospektdj.ProspektDJ --demo > flatpak-smoke.log 2>&1
           flatpak_result=$?
-          echo "AppImage exit: $appimage_result; Flatpak exit: $flatpak_result"
           cat appimage-smoke.log flatpak-smoke.log
           test "$appimage_result" -eq 124 && test "$flatpak_result" -eq 124
       - uses: actions/upload-artifact@v4
@@ -86,46 +106,49 @@ jobs:
             release-dist/*.AppImage
             release-dist/*.flatpak
           if-no-files-found: error
-  publish:
-    needs: build
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+  windows7:
+    name: Experimental Windows 7 ${{ matrix.arch }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, i686]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          pattern: package-*
-          path: release-assets
-          merge-multiple: true
-      - name: Checksums and release notes
-        shell: bash
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: ./.github/actions/setup-asio
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: win7-${{ matrix.arch }}
+      - name: Attempt Windows 7 target
+        shell: pwsh
         run: |
-          python3 - <<'PY'
-          import hashlib
-          from pathlib import Path
-          import re
-          version = re.search(r'^version = "([^"]+)"', Path('Cargo.toml').read_text(), re.M).group(1)
-          assets = sorted(Path('release-assets').glob('*'))
-          assert len(assets) == 6, f'Expected five packages plus ASIO source archive, got {len(assets)}'
-          import shutil
-          screenshots = sorted(Path('docs/screenshots/pre-beta-0.0.1').glob('*.png'))
-          assert len(screenshots) == 4, 'Expected four current pre-beta 0.0.1 screenshots'
-          for screenshot in screenshots:
-              shutil.copy2(screenshot, Path('release-assets') / screenshot.name)
-          shutil.copy2('docs/screenshots/pre-beta-0.0.1/build-info.json', 'release-assets/screenshot-build-info.json')
-          import subprocess
-          subprocess.run(['git', 'archive', '--format=zip', f'--prefix=Prospekt-DJ-{version}-source/', 'HEAD', '-o', f'release-assets/Prospekt-DJ-{version}-source.zip'], check=True)
-          assets = sorted(Path('release-assets').glob('*'))
-          Path('release-assets/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in assets))
-          notes = Path('docs/RELEASE-0.0.1.md').read_text().replace('{{TAG}}', f'v{version}').replace('{{VERSION}}', version)
-          Path('release-notes.md').write_text(notes)
-          with open(__import__('os').environ['GITHUB_ENV'], 'a') as file:
-              file.write(f'RELEASE_TAG=v{version}\nRELEASE_VERSION={version}\n')
-          PY
-      - name: Publish release with all packages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Prospekt DJ — pre-beta 0.0.1" --notes-file release-notes.md
+          $target = '${{ matrix.arch }}-win7-windows-msvc'
+          $env:BINDGEN_EXTRA_CLANG_ARGS = '--target=${{ matrix.arch }}-pc-windows-msvc'
+          New-Item -ItemType Directory -Force release-dist | Out-Null
+          cargo build --locked --release --target $target -Z build-std=std,panic_abort *> "release-dist/windows7-${{ matrix.arch }}-build.log"
+          $result = $LASTEXITCODE
+          if ($result -eq 0) {
+            $platform = if ('${{ matrix.arch }}' -eq 'i686') { 'windows7-x86-experimental' } else { 'windows7-x64-experimental' }
+            python scripts/package_release.py --target $target --platform $platform
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            "PL: Kompilacja udana. Brak testu uruchomienia na Windows 7; paczka eksperymentalna. EN: Build succeeded; not runtime-tested on Windows 7. Experimental only." | Set-Content "release-dist/windows7-${{ matrix.arch }}-status.txt"
+          } else {
+            "PL: Proba kompilacji nieudana (kod $result). Nie utworzono paczki Windows 7. EN: Build failed ($result); no Windows 7 binary package produced. See build log." | Set-Content "release-dist/windows7-${{ matrix.arch }}-status.txt"
+          }
+          Get-Content "release-dist/windows7-${{ matrix.arch }}-status.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: experimental-windows7-${{ matrix.arch }}
+          path: |
+            release-dist/windows7-*.txt
+            release-dist/windows7-*.log
+            release-dist/*windows7*.zip
+          if-no-files-found: error

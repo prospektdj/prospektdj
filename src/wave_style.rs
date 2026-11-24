@@ -31,7 +31,11 @@ pub struct WaveStyle {
     pub saturation: f32,
     pub height: f32,
     pub grid: bool,
+    pub beat_background: bool,
+    pub reflections: bool,
+    pub reflection_color: Option<[u8; 3]>,
     pub markers: bool,
+    pub spread_cue_labels: bool,
     pub palette: [[u8; 3]; 3],
 }
 impl Default for WaveStyle {
@@ -42,7 +46,11 @@ impl Default for WaveStyle {
             saturation: 1.,
             height: 1.,
             grid: true,
+            beat_background: true,
+            reflections: true,
+            reflection_color: None,
             markers: true,
+            spread_cue_labels: false,
             palette: [[255, 80, 40], [70, 220, 100], [70, 130, 255]],
         }
     }
@@ -87,4 +95,12 @@ impl WaveStyle {
         let gray = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
         c.map(|v| ((gray + (v - gray) * saturation) * brightness).clamp(0., 255.) as u8)
     }
+}
+
+/// Stable shuffled levels: labels do not jump when frames or playback positions change.
+pub fn cue_label_level(track_id: &str, slot: usize) -> f32 {
+    let seed = track_id.bytes().fold(0u64, |hash, byte| {
+        hash.wrapping_mul(131).wrapping_add(u64::from(byte))
+    });
+    ((slot.wrapping_mul(5).wrapping_add(seed as usize)) % 8) as f32 / 7.
 }

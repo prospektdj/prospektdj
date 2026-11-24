@@ -249,6 +249,7 @@ pub struct Catalog {
 pub enum Scope {
     Recent,
     Frequent,
+    History(String),
     Rating(u8),
     #[default]
     All,
@@ -336,6 +337,7 @@ impl Catalog {
             .filter(|(_, path)| {
                 let scope = match q.scope {
                     Scope::All => true,
+                    Scope::History(_) => false,
                     Scope::Recent | Scope::Frequent => {
                         self.entries.get(*path).is_some_and(|e| e.local_plays > 0)
                     }

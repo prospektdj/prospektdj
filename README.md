@@ -1,217 +1,59 @@
-# Prospekt DJ — pre-beta 0.0.1
+# Prospekt DJ — pre-alpha 0.0.1 test
 
-<p align="center"><img src="assets/logo.png" width="640" alt="Prospekt DJ PRE-BETA — grapefruit-pink logo" /></p>
+## 🇵🇱 Polski
 
-[Polski](#polski) · [English](#english) · [Pobierz / Download pre-beta 0.0.1](https://github.com/prospektdj/prospektdj/releases/tag/v0.0.1-prebeta)
+Natywny, otwartoźródłowy program DJ dla Windows i Linux. Własny kod Rust/egui, bez Electrona. [Wydania i paczki](https://github.com/prospektdj/prospektdj/releases) · [Dokumentacja](docs/INDEX.md) · [Licencje](docs/DEPENDENCIES.md).
 
-## Polski
+### 🎛️ Funkcje
 
-**Prospekt DJ to prosta, otwartoźródłowa alternatywa dla VirtualDJ, Serato DJ i rekordbox, rozwijana w Rust dla Windows i Linux.** Wersja **0.0.1-prebeta jest PRE-BETA**: nadaje się do testowania i zgłaszania uwag, ale nie stanowi deklaracji stabilności ani pełnej zgodności sprzętowej. Aktualizacja realizuje pierwszy etap nowego planu rozwoju; nie wszystkie jego 11 punktów są ukończone.
+- Dwa lub cztery deki, powiększone jogi czarne/białe, animowana wskazówka, pitch bend i PLAY/CUE/SYNC. Chwilowy reverse i potwierdzane wysuwanie utworu.
+- Menu HOT CUE / AUTO LOOP / MANUAL LOOP / SAMPLER / EFFECTS na każdym deku. Osiem punktów CUE i osiem efektów: Filter, Echo, Reverb, Flanger, Chorus, Tremolo, Distortion, Bitcrusher. Efekty mają niezależny wybór, ON/OFF, bypass i małe pokrętła.
+- Główne waveformy z siatką rytmu, dużymi flagami CUE, przybliżaniem kółkiem myszy i odbiciami między sąsiednimi kanałami. Przełączniki WAVEFORMY i BIAŁE JOGI na górnym pasku.
+- BANGER SITE / Kolekcja, BANGER BOX, ulubione utwory i foldery, kolory folderów, SAMPLER, foldery systemowe, dyski i powiadomienia o nośnikach. Panele boczne zwijają się w animacji.
+- Okładki bez odstępów, animacje, odbicia, menu ładowania A–D, przeciąganie prawym przyciskiem oraz okno metadanych po 6,66 s. Duży podgląd waveformu z CUE przez prawy przycisk na miniaturze.
+- TRACK INFO: tonacja w kolorze, komentarze z emoji, osiem pól CUE, odsłuch poza dekami przez PHONES i przyciski ładowania utworu.
+- Lokalne rekomendacje BPM/tonacja/gatunek, odstęp 1–3600 s (domyślnie 60 s), maksymalnie dwa pokazania na cykl, ostatnie 10 propozycji i statystyki. Historia TXT domyślnie włączona, retencja ponad 30 dni. Historia odtworzeń w datowanych sesjach.
+- AutoMix A/B, nagrywanie miksu, mikrofon, streaming Icecast i Shoutcast v1 przez zewnętrzny FFmpeg. BCAST, MIDI LEARN, KEY i DEV na górnym pasku.
+- Dwa kontrolery MIDI z osobnymi mapowaniami i wykrywaniem portów. Katalog 334 profili nie zastępuje testu konkretnego sprzętu.
+- Kopiowanie, przenoszenie, zmiana nazw, podfoldery, właściwości systemowe, odświeżanie tagów i okładek. Integracja Google Drive tylko do odczytu, z własnym klientem OAuth Desktop.
+- Windows: WASAPI, ASIO i wykrywanie osobno zainstalowanego ASIO4ALL. Linux: ALSA z mostem PulseAudio/PipeWire, poprawione rozpoznawanie PCM i odzyskiwanie po błędzie domyślnego wyjścia oraz wejścia.
+- Dane aplikacji przenośnej są razem obok pliku wykonywalnego; komentarze i CUE w SQLite. Wyjątki pakietów systemowych, AppImage i Flatpak opisano w dokumentacji danych.
 
-Własny kod aplikacji i testów jest napisany w Rust, bez Electrona, przeglądarki i Node.js. Biblioteki systemowe, dołączony SQLite i opcjonalny FFmpeg są zewnętrznymi zależnościami; SQLite zawiera kod C. Projekt jest objęty **AGPL-3.0-or-later**. Grafiki, fonty, mapowania i biblioteki zachowują odrębne licencje w [licenses](licenses). Kod aplikacji powstaje samodzielnie; OpenFadeR wykorzystano jako materiał referencyjny, bez kopiowania jego kodu aplikacji.
+### 🚀 Uruchomienie
 
-### Aktualne zrzuty pre-beta 0.0.1
+Rozpakuj paczkę do zapisywalnego folderu i uruchom `prospekt-dj.exe` lub `./prospekt-dj`. Nie przenoś samego pliku wykonywalnego bez danych programu. Linux wymaga ALSA, X11/OpenGL i systemowych usług audio; w kontenerze Chromebooka potrzebny jest działający most audio i pakiet `libasound2-plugins`. Opcjonalny FFmpeg jest potrzebny do nagrywania MP3 i transmisji. Nie instaluje się sterowników automatycznie.
 
-Poniższe zrzuty wykonano z rzeczywistej, zoptymalizowanej kompilacji Linux **0.0.1-prebeta**. Audio i okładki demonstracyjne są własnymi materiałami testowymi. [Daty, rozdzielczości i sumy kontrolne kompilacji/zrzutów](docs/screenshots/pre-beta-0.0.1/build-info.json). Sumy binariów z CI znajdują się osobno w `SHA256SUMS.txt` w wydaniu.
+### 🧪 Status i budowanie
 
-![Prospekt DJ pre-beta 0.0.1 — mikser, trwałe Hot Cue i biblioteka](docs/screenshots/pre-beta-0.0.1/main-dark.png)
+To **pre-alpha 0.0.1 test**, przeznaczone do prób. Zmiana tempa zmienia wysokość dźwięku; brak key lock i STEMS. SYNC dopasowuje tempo, nie fazę. AutoMix używa A/B. Modele urządzeń wynikają z portów/profili, a nie certyfikacji USB. Linuxowe testy mostu korzystają z symulowanego PCM; Chromebook, sterowniki ASIO/Realtek, kontrolery i nośniki wymagają testów fizycznych. Próba Windows 7 jest eksperymentalna i nie oznacza potwierdzonej zgodności. Pełne tłumaczenie wszystkich ekranów na wszystkie języki nie jest ukończone.
 
-![Prospekt DJ pre-beta 0.0.1 — cztery decki i miksery A/B oraz C/D](docs/screenshots/pre-beta-0.0.1/four-decks.png)
+Rust ≥1.89, `cargo build --locked --release`. [Platformy i testy](docs/BUILD.md). [Dane przenośne](docs/PORTABLE-DATA.md), [audio Chromebook](docs/CHROMEBOOK-AUDIO.md), [ASIO4ALL](docs/ASIO4ALL.md). Kod aplikacji: AGPL-3.0-or-later ([LICENSE](LICENSE)); oddzielne licencje bibliotek, mapowań, fontów i grafik zachowano w `licenses/`. Plik LICENSE zawiera oryginalny, niezmieniony tekst AGPL.
 
-![Prospekt DJ pre-beta 0.0.1 — ustawienia wyglądu](docs/screenshots/pre-beta-0.0.1/settings.png)
+## 🇬🇧 English
 
-[Wariant białych jogów](docs/screenshots/pre-beta-0.0.1/main-white.png). Zrzuty wcześniejszych etapów zachowano w dokumentacji historycznej.
+Native open-source DJ application for Windows and Linux. Original Rust/egui code, without Electron. [Releases and packages](https://github.com/prospektdj/prospektdj/releases) · [Documentation](docs/INDEX.md) · [Licenses](docs/DEPENDENCIES.md).
 
-### Nowe funkcje w pre-beta 0.0.1
+### 🎛️ Features
 
-- **Windows i audio:** poprawiony rozruch ciemnego motywu, odtwarzanie po błędach urządzenia, diagnostyka i bezpieczny bufor domyślny sterownika. Realtek: wybierz **WASAPI**, domyślne wyjście / Speakers. **ASIO** jest dostępne na Windows, wymaga osobno zainstalowanego zgodnego sterownika 64-bitowego. Program nie instaluje sterownika sprzętowego. ASIO pozwala kierować MASTER i PFL na różne pary jednego interfejsu; błędny odsłuch nie zatrzymuje MASTER.
-- **Mikrofon:** pokrętło MIC obok MASTER i PHONES; włączanie i wybór systemowego wejścia w ustawieniach audio. Kanał wejściowy 1 trafia do obu kanałów MASTER i nagrania, bez PFL. Domyślnie mikrofon jest wyłączony. [Szczegóły i ograniczenia](docs/MICROPHONE.md).
-- **Jogi i transport:** czarne lub białe wnętrze z kontrastowym tekstem; pogrubione BPM u góry i czasy u dołu, obracająca się czarna wskazówka i jasnobłękitny środek. PLAY/CUE/SYNC i SET CUE/PFL/VINYL/−/+ są pod jogami, wyrównane; SYNC dochodzi do prawej krawędzi +. PLAY miga co pół sekundy podczas pauzy (opcja). Kwadratowe szare przyciski **R** i **↑**: chwilowy Slip Reverse wraca po puszczeniu do bieżącego miejsca normalnej osi czasu; wyrzucanie wymaga potwierdzenia i zachowuje CUE/pliki. Pozostał główny pionowy pitch bend; usunięto mały poziomy fader tempa.
-- **Waveformy i mikser:** przybliżanie kółkiem myszy nad głównym waveformem, wyższe przebiegi dla 2 decków i niższe dla 4, większe kolorowe flagi CUE z większym polem kliknięcia. Wyśrodkowane miksery i minimalistyczne suwaki bez podziałek. Usunięto zakładkę Mixer spod waveformów; główne miksery pozostają dostępne.
-- **Rekomendacje na żywo:** duży czerwony pogrubiony pasek po polsku, strzałki ◀◀◀ / ▶▶▶ i ładowanie propozycji na A/B lub A/B/C/D. Cały zaindeksowany katalog jest oceniany w tle według BPM (także pół/podwójne tempo), zgodności tonacji i gatunku co 3 s. To analiza metadanych, nie automatyczne rozpoznawanie tonacji z audio. [Algorytm](docs/LIVE-RECOMMENDATIONS.md).
-- **Biblioteka:** domyślny nagłówek **🔥 BANGER SITE**, przełączany na Kolekcja w ustawieniach; nazwa kolekcji użytkownika to **BANGER BOX**. **❤️ ULUBIONE** są różowe i pogrubione, **💿 NA DEKACH** czerwone. Ulubiony utwór ma serduszko obok gwiazdki. Nuty między gwiazdką a numerem oznaczają niegrany utwór; czerwone przekreślenie oznacza odtworzenie w bieżącej sesji według progu historii MASTER. Status obejmuje A–D i resetuje się po restarcie aplikacji.
-- **TRACK INFO i grafika:** osiem kolorowych pól CUE z czasem lub kreską, komentarze z wyborem emoji i kolorowym podglądem, płynne zanikanie okładek podczas przewijania. Widoczność emoji i animacje są przełączane w ustawieniach; emoji są domyślnie włączone, dane komentarzy/nazw nie są usuwane po ukryciu.
-- **Kontrolery:** wykrywanie wejść MIDI w tle i komunikat **ODNALEZIONO URZĄDZENIE — KONTROLER**. Jednoznaczne użyteczne mapowanie z lokalnej bazy jest stosowane automatycznie, jeśli inny kontroler nie jest połączony; warianty wymagają wyboru. Obsługiwane jest odłączanie/ponowne podłączanie. [Zakres rozpoznawania](docs/CONTROLLER-DETECTION.md).
-- **Typografia i licencje:** Segoe UI Regular, Arial Regular i Arial Bold zainstalowane w systemie, z otwartymi zamiennikami przy ich braku. Fonty Microsoftu nie są redystrybuowane. Kod aplikacji pozostaje w Rust; usunięto „Rust” z nazwy produktu i paczek. Numeracja zaczyna się od pre-beta 0.0.1; dane wcześniejszych wersji korzystają z zachowanej lokalizacji konfiguracji.
+- Two or four decks, enlarged black/white jogs, rotating hand, pitch bend and PLAY/CUE/SYNC. Momentary slip reverse and confirmed track ejection.
+- HOT CUE / AUTO LOOP / MANUAL LOOP / SAMPLER / EFFECTS menu on each deck. Eight hot cues and eight effects: Filter, Echo, Reverb, Flanger, Chorus, Tremolo, Distortion, Bitcrusher. Effects offer independent selection, enable switches, bypass and compact knobs.
+- Main waveforms with beat grid, large cue flags, wheel zoom and reflections between adjacent channels. WAVEFORMY and BIAŁE JOGI toggles in the header.
+- BANGER SITE / Collection, BANGER BOX, favorite tracks/folders, folder colors, SAMPLER, system folders, disks and mounted-media notifications. Animated collapsible side panels.
+- Gapless artwork gallery, transitions, reflection strips, A–D loading menus, right-button drag and metadata popup after 6.66 seconds. Right-click a track-table preview for a large waveform with cues.
+- TRACK INFO: colored musical key, emoji comments, eight cue fields, off-deck headphone preview and track-loading buttons.
+- Local BPM/key/genre recommendations, 1–3600-second interval (default 60), at most two presentations per cycle, ten-item history and statistics. Optional TXT history enabled by default, retention beyond 30 days. Dated playback-history sessions.
+- A/B AutoMix, mix recording, microphone, Icecast and Shoutcast v1 broadcasting through external FFmpeg. BCAST, MIDI LEARN, KEY and DEV header controls.
+- Two MIDI controllers with independent mapping banks and port discovery. The 334-profile catalog does not establish physical hardware certification.
+- Copy, move, rename, subfolders, system properties, tag/artwork refresh. Read-only Google Drive integration requires your own Desktop OAuth client.
+- Windows: WASAPI, ASIO and discovery of separately installed ASIO4ALL. Linux: ALSA with PulseAudio/PipeWire bridge, corrected PCM identification and default output/input recovery.
+- Portable application data stays beside the executable; comments and cues use SQLite. System-package, AppImage and Flatpak writable-data exceptions are documented.
 
-### Funkcje zachowane i rozwinięte
+### 🚀 Run
 
-- **Nowy mikser:** symetryczne kolumny HIGH/MID/LOW w kolorach zielonym/złotym/czerwonym, osobny GAIN przed EQ i faderem, wspólny filtr LPF/HPF, fadery kanałów, rzeczywiste mierniki i PFL. MASTER, PHONES i kwadratowy przycisk REC znajdują się w nagłówku. Mikser ma tło `#1A1A1A`; reszta interfejsu pozostaje ciemna.
-- **Trwałe Hot Cue:** osiem slotów na nagranie zapisuje się w SQLite, wraca po restarcie i jest współdzielone między deckami z tym samym audio. Tożsamość bazuje na zdekodowanym sygnale, nie na tytule ani ścieżce. Usunięcie Cue jest zapisywane, także dla punktu w 0 sekundzie. Oryginalne pliki muzyczne nie są zmieniane.
-- **Biblioteka:** kolumna PREVIEW i waveform w TRACK INFO korzystają z rzeczywistej analizy zapisywanej w cache. Dodano oceny 1–5, komentarze, dokładne filtry ocen, lokalną historię MASTER oraz widoki ostatnio/najczęściej odtwarzanych utworów. Ulubione pozostają osobnym oznaczeniem.
-- **Samplery w deckach:** cztery współdzielone sloty 2×2, ładowanie pliku, wyzwalanie, czyszczenie, przechwycenie fragmentu aktywnego decka i poziom. Kliknięcie pustego slotu wybiera plik; menu pod prawym przyciskiem udostępnia pozostałe operacje. Dawna duża zakładka Samples została usunięta.
-- **Sterowanie:** większe animowane PLAY/SYNC, kompaktowe Auto/Manual Loop, stan IN i powrót do zapisanej pętli po EXIT. PITCH BEND na A/C znajduje się między jogiem a mikserem i po puszczeniu wraca do zera.
-- **Ustawienia i wydajność:** boczne kategorie, wyszukiwanie kategorii, skala UI, limit odświeżania, ograniczenie animacji i widoczność statystyk. Waveformy mają osiem presetów, w tym własną paletę, regulację jasności/nasycenia/wysokości oraz przełączniki siatki i markerów.
-- **RAM i FPS:** rzeczywista pamięć systemowa i zmierzone tempo klatek. VRAM pokazuje `N/D`, jeśli brak obsługi odczytu sterownika.
-- Zachowano 2/4 decki, jog/scratch, osiem efektów, MIDI, PFL, automix A/B, nagrywanie, BANGER BOX z kolorowymi emoji, drzewo folderów i okładki.
+Extract into a writable directory and run `prospekt-dj.exe` or `./prospekt-dj`. Keep the application data with the executable. Linux requires ALSA, X11/OpenGL and system audio services; Chromebook containers need a working audio bridge and `libasound2-plugins`. Optional external FFmpeg enables MP3 recording and broadcasting. Hardware drivers are never installed automatically.
 
-[Szczegółowy stan 11 punktów i pozostałe prace](docs/next-update/STATUS.md) · [Poprzednia aktualizacja 2.3](docs/UPDATE-2.3.md)
+### 🧪 Status and build
 
-### Import biblioteki — obsługiwany zakres
+This is **pre-alpha 0.0.1 test**, intended for testing. Tempo changes affect pitch; key lock and STEMS are unavailable. SYNC matches tempo rather than beat phase. AutoMix uses A/B. Device models come from ports/profiles, not USB certification. Linux bridge tests use a simulated PCM; Chromebook, ASIO/Realtek, controllers and storage require physical testing. Windows 7 builds are experimental attempts, not verified compatibility. Complete localization of every screen into every language is unfinished.
 
-Kreator jest dostępny po aktualizacji oraz w **Ustawienia → Import i baza**. Najpierw pokazuje podgląd, brakujące ścieżki i ograniczenia. Źródła są odczytywane bez modyfikacji. Ręczne oceny, komentarze i zajęte sloty Cue mają pierwszeństwo. Import zapisuje raport `last-import-report.json`.
-
-| Źródło | Odczytywane dane | Ograniczenia |
-|---|---|---|
-| rekordbox `DJ_PLAYLISTS` XML | Metadane, BPM/czas, oceny 0–255, komentarze, daty/liczniki obecne w eksporcie, Hot Cue 0–7, playlisty | Memory Cue nie staje się Hot Cue. XML nie zawiera pełnej historii sesji. |
-| VirtualDJ `database.xml` | Tags/Infos/Scan, komentarze, dostępne daty/liczniki, Cue 1–8; konwersja sekund/beat na BPM | Osobne playlisty i pliki historii nie są jeszcze importowane. |
-| Mixxx SQLite | Powiązania `library.location → track_locations.id`, metadane, oceny, komentarze, dostępne liczniki/daty, skrzynki i playlisty | Odczyt spójnej transakcji z WAL. Natywne Cue i szczegółowe zdarzenia historii wymagają dalszej implementacji. |
-| Serato CSV UTF-8 | Tytuł, wykonawca i inne dostępne pola historii, z jawną kolumną ścieżki pliku | Eksporty wyłącznie z tytułem są odrzucane. Natywna baza, skrzynki i markery Serato nie są jeszcze obsługiwane. |
-
-Liczniki i daty źródłowe są zachowywane osobno; nie są bezwarunkowo sumowane z lokalnymi odtworzeniami. Nieobsługiwane lub brakujące dane nie są uzupełniane wymyśloną historią. Przeniesione dyski i konflikty ścieżek nadal mogą wymagać ręcznej naprawy. To nie jest jeszcze pełny importer wszystkich wariantów tych czterech programów.
-
-### Pobieranie i instalacja
-
-[Wydanie pre-beta 0.0.1](https://github.com/prospektdj/prospektdj/releases/tag/v0.0.1-prebeta) zawiera pięć paczek, archiwum kodu projektu, odpowiadające źródła ASIO SDK (GPLv3), zrzuty i `SHA256SUMS.txt`:
-
-| System / format | Uruchomienie |
-|---|---|
-| Windows 10/11 x64 — ZIP | Rozpakuj i uruchom `prospekt-dj.exe`. Program nie jest podpisany cyfrowo. |
-| Linux x64 — tar.gz | Rozpakuj i uruchom `./prospekt-dj`. |
-| Debian/Ubuntu amd64 — DEB | `sudo apt install ./prospekt-dj_0.0.1-prebeta_amd64.deb` |
-| Linux — AppImage | `chmod +x Prospekt-DJ-*.AppImage`, następnie uruchom plik. Bez FUSE użyj `APPIMAGE_EXTRACT_AND_RUN=1`. |
-| Linux — Flatpak | `flatpak install --user ./Prospekt-DJ-*.flatpak`, następnie `flatpak run org.prospektdj.ProspektDJ`. Runtime pobierany jest z Flathub. |
-
-Linux: paczki budowane na Ubuntu 22.04, glibc 2.35+, ALSA, X11/XWayland i OpenGL/Mesa. Systemowy wybór plików wymaga XDG Desktop Portal i backendu pulpitu. Flatpak udostępnia katalog Muzyka bezpośrednio, inne pliki przez portal. macOS nie jest częścią tego wydania.
-
-Demo uruchomisz przez `prospekt-dj --demo` lub przycisk w ustawieniach. Pliki/foldery można upuszczać na okno. **WAV i AIFF są natywne**; nagrywanie do MP3/FLAC/Ogg/Opus wymaga osobnego FFmpeg w PATH, obok programu lub wskazanego przez `PROSPEKT_FFMPEG`. FFmpeg nie jest dołączany; w Flatpaku musi być dostępny wewnątrz środowiska aplikacji. Przy błędzie konwersji pozostaje plik WAV.
-
-### Dane, prywatność i ograniczenia
-
-- Katalog, skrzynki i ulubione są zachowywane. `tracks.sqlite` przechowuje Cue, dane użytkownika, analizę, lokalną historię i dane importu. Ścieżkę konfiguracji pokazują ustawienia. Przed ręczną kopią całego katalogu konfiguracji zamknij aplikację; nie kopiuj samej aktywnej bazy z pominięciem WAL.
-- Lokalne odtworzenie jest domyślnie zaliczane po 30 sekundach na MASTER; dla krótkich utworów po połowie długości lub progu, zależnie od tego, co jest krótsze. Próg można zmienić. Samo ładowanie, analiza i PFL bez MASTER nie zwiększają licznika.
-- **Pobieranie okładek jest domyślnie włączone.** MusicBrainz / Cover Art Archive otrzymuje publiczne metadane artysty, albumu, tytułu lub identyfikatory; nie otrzymuje audio ani prywatnych ścieżek. Opcję można wyłączyć. Dopasowanie jest ostrożne i może pozostawić pustą okładkę. Tagi pliku nie są zapisywane.
-- SYNC jednorazowo dopasowuje tempo, bez synchronizacji fazy. Zmiana tempa zmienia wysokość dźwięku. Nie ma key lock ani STEMS. Automix używa A/B.
-- PFL w WASAPI wymaga osobnego urządzenia systemowego; ASIO na Windows obsługuje oddzielne pary kanałów pojedynczego interfejsu. Brak bezpośredniego JACK. 334 profile MIDI nie oznaczają fizycznej certyfikacji kontrolerów; 289 zawiera rozpoznane przypisania. Nie ma pełnego wyjścia LED/HID.
-- W 1280×720 cztery decki wymagają przewijania panelu; biblioteka przewija kolumny poziomo. TRACK INFO jest dostępny w szerokich oknach i przewija się pionowo.
-- **Pełne tłumaczenia 24 języków UE nie są jeszcze gotowe.** Zachowano dotychczasowe dziesięć języków podstawowych kontrolek; nowe przepływy i część opisów są po polsku/angielsku. Pozostałe prace: pełniejsza historia/import, rozwiązywanie konfliktów i ścieżek, kopia/odtworzenie z UI i całkowicie asynchroniczny start bazy.
-- Limity: plik utworu 100 MiB, zdekodowany PCM do 512 MiB; sample do 32 MiB i 120 s. Audio samplera i główny CUE pozostają danymi sesji; zapis Hot Cue jest trwały. Tożsamość PCM zależy od dekodera. Wielogodzinne nagrywanie i stabilność na fizycznym sprzęcie wymagają dalszych testów.
-
-### Sterowanie i budowanie
-
-| Skrót | Funkcja |
-|---|---|
-| Q/P, A/L | Play/pauza i CUE na A/B |
-| Spacja, Escape | Play/pauza aktywnego decka; pauza wszystkich |
-| F1–F8, Shift + pad | Hot Cue aktywnego decka; usunięcie punktu/sampla |
-| 1–4 / 7–0 | Pady A/B zgodnie z trybem |
-| Z/X, N/M | Chwilowy pitch bend A/B |
-| Enter / Shift+Enter | Załaduj zaznaczony utwór do A/B |
-| Strzałki, F11 | Wybór w bibliotece/crossfader; pełny ekran |
-
-Mysz: przeciąganie knobów/jogów, Shift dla dokładnej regulacji, dwuklik kontrolki dla resetu. Skróty decków są wyłączane podczas wpisywania tekstu i w ustawieniach. Stare mapowanie MIDI `gain` nadal steruje faderem; nowa akcja `pre_gain` steruje osobnym GAIN.
-
-Wymagany Rust **1.89+**, Linux: `build-essential pkg-config libasound2-dev libx11-dev`; Windows: MSVC Build Tools z Windows SDK oraz LLVM/libclang; uruchom `python scripts/prepare_asio_sdk.py --output .asio-sdk --archive-output release-dist/ASIO-SDK-2.3.4-GPL3-source.zip` i ustaw `CPAL_ASIO_DIR` na pełną ścieżkę `.asio-sdk`. SQLite jest kompilowany z dołączonych źródeł zależności.
-
-```sh
-cargo fmt --all --check
-cargo test --locked
-cargo clippy --locked --all-targets -- -D warnings
-cargo build --locked --release
-```
-
-Lokalnie przeszły **102 testy**, w tym CPAL na ALSA null i opcjonalne eksporty FFmpeg. To nie jest test fizycznego odsłuchu, MIDI, VRAM ani latencji. Workflow wydania ponownie sprawdza Linux i Windows, instaluje DEB oraz uruchamia testy startu AppImage/Flatpak. [Weryfikacja](docs/TESTS.md) · [Licencje zależności](docs/DEPENDENCIES.md) · [Pochodzenie](docs/PROVENANCE.md).
-
-## English
-
-**Prospekt DJ is a simple open-source alternative to VirtualDJ, Serato DJ and rekordbox, developed in Rust for Windows and Linux.** **0.0.1-prebeta is PRE-BETA**: intended for testing and feedback, with no claim of stability or complete hardware compatibility. This release implements the first stage of the new development plan; not all eleven requirements are complete.
-
-Our application and test code is Rust, with no Electron, browser or Node.js runtime. System libraries, bundled SQLite and optional FFmpeg are external dependencies; SQLite includes C code. The project is **AGPL-3.0-or-later**. Artwork, fonts, mappings and libraries retain their separate licenses in [licenses](licenses). Application code is independently developed; OpenFadeR was consulted as reference material without copying its application code.
-
-### Current pre-beta 0.0.1 screenshots
-
-The screenshots above are captured from the actual optimized Linux **0.0.1-prebeta** executable. Demo audio and covers are original test fixtures. [Capture dates, dimensions and executable/screenshot checksums](docs/screenshots/pre-beta-0.0.1/build-info.json). CI package hashes are recorded separately in the release's `SHA256SUMS.txt`.
-
-[Two decks](docs/screenshots/pre-beta-0.0.1/main-dark.png) · [Four decks](docs/screenshots/pre-beta-0.0.1/four-decks.png) · [Settings](docs/screenshots/pre-beta-0.0.1/settings.png) · [White jogs](docs/screenshots/pre-beta-0.0.1/main-white.png). Earlier captures remain historical documentation.
-
-### New in pre-beta 0.0.1
-
-- **Windows/audio:** pinned startup theme, device-error recovery, diagnostics and driver-default buffering. For Realtek use **WASAPI** and the default/Speakers endpoint. Windows **ASIO** requires a separately installed compatible 64-bit hardware driver; the app does not install one. ASIO can route MASTER/PFL to distinct pairs on one interface; optional headphone failure does not stop MASTER.
-- **Microphone:** MIC knob alongside MASTER/PHONES, system-input selection and enable switch in Audio settings. Input channel 1 feeds both MASTER channels and recording, excluded from PFL; off by default. [Details](docs/MICROPHONE.md).
-- **Jogs/transport:** black or white interiors, bold top BPM/lower time readouts, rotating opaque black hand and light-blue hub. PLAY/CUE/SYNC and SET CUE/PFL/VINYL/−/+ sit beneath each jog, with aligned outer edges. Optional half-second paused-PLAY blinking. Gray square **R** provides held Slip Reverse with forward-timeline catch-up; **↑** ejects only after confirmation, preserving files/Cue. The vertical pitch bend remains; the small horizontal tempo fader is removed.
-- **Waveforms/mixer:** mouse-wheel zoom, taller two-deck/shorter four-deck waveforms and larger Cue flags/hit areas. Centered mixers and minimalist unticked faders. The old lower Mixer tab is removed; main mixers remain.
-- **Live recommendations:** larger bold red Polish strip, ◀◀◀ / ▶▶▶ navigation and load buttons A/B or A/B/C/D. A background worker ranks the whole indexed catalog every three seconds using BPM (including half/double tempo), harmonic keys and genre. This analyzes metadata, not acoustic key detection. [Algorithm](docs/LIVE-RECOMMENDATIONS.md).
-- **Library:** default **🔥 BANGER SITE** heading, optional Kolekcja; user collections are **BANGER BOX**. Pink bold **❤️ ULUBIONE**, red **💿 NA DEKACH**, heart beside favorite stars, and music-note indicators crossed out red after a qualifying MASTER play on any deck this session. Session markers reset on app restart.
-- **TRACK INFO/graphics:** eight colored Cue times or dashes, emoji insertion into comments with color preview, optional scrolling cover fades and saved emoji visibility (on by default). Hiding emoji does not delete comment/name data.
-- **Controllers:** background MIDI discovery with an **ODNALEZIONO URZĄDZENIE — KONTROLER** dialog, conservative local model matching, automatic application of a single usable profile if no controller is connected, manual variant selection and reconnect handling. [Scope](docs/CONTROLLER-DETECTION.md).
-- **Typography/licensing:** installed Segoe UI Regular, Arial Regular/Bold, with open substitutes. Microsoft font files are not redistributed. Application code remains Rust; product/package names omit “Rust”. Version numbering restarts at pre-beta 0.0.1 while the legacy configuration location is retained for existing user data.
-
-### Retained and expanded features
-
-- **New mixer:** mirrored HIGH/MID/LOW columns with green/gold/red accents, independent pre-EQ/pre-fader GAIN, shared LPF/HPF filter, channel faders, real meters and PFL. Global MASTER, PHONES and the square REC button move to the header. The mixer uses `#1A1A1A`; the surrounding interface remains dark.
-- **Persistent Hot Cue:** eight slots per recording are stored in SQLite, restored after restart and shared across decks containing the same audio. Identity hashes decoded source audio rather than title/path. Deletions and cues at zero seconds are preserved. Original music files are not modified.
-- **Library:** the PREVIEW column and TRACK INFO waveform use real cached analysis. Ratings 1–5, comments, exact rating filters, local MASTER playback history and recent/frequent views are added. Favorites remain independent.
-- **Deck-local sampler:** four shared slots in a 2×2 grid, file loading, triggering, clearing, focused-deck capture and level control. Click an empty slot to choose a file; right-click for additional actions. The old large Samples tab is removed.
-- **Controls:** larger animated PLAY/SYNC, compact Auto/Manual Loop, visible IN state and saved-loop re-entry after EXIT. A/C PITCH BEND sits between jog and mixer and returns to zero when released.
-- **Settings/performance:** category sidebar, category search, UI scale, refresh limit, reduced motion and statistics visibility. Eight waveform presets include a custom palette, brightness/saturation/height and grid/marker switches.
-- **RAM/FPS:** actual system memory and measured frame rate. VRAM displays `N/D` when driver telemetry is unavailable.
-- Existing 2/4 decks, jog/scratch, eight effects, MIDI, PFL, A/B automix, recording, color-emoji BANGER BOX collections, folder tree and artwork remain available.
-
-[Eleven-point implementation status and remaining work](docs/next-update/STATUS.md) · [Previous 2.3 update](docs/UPDATE-2.3.md)
-
-### Library import — supported scope
-
-The wizard appears after updating and remains available under **Settings → Import and database**. It first previews recognized data, missing paths and limitations. Sources are read without modification. Manual ratings/comments and occupied Cue slots take priority. The import writes `last-import-report.json`.
-
-| Source | Imported data | Limits |
-|---|---|---|
-| rekordbox `DJ_PLAYLISTS` XML | Metadata, BPM/duration, 0–255 ratings, comments, available dates/counts, Hot Cue 0–7 and playlists | Memory Cue is excluded from Hot Cue. Collection XML is not complete session history. |
-| VirtualDJ `database.xml` | Tags/Infos/Scan, comments, available dates/counts and Cue 1–8; seconds-per-beat converted to BPM | Separate playlists and history files are not yet imported. |
-| Mixxx SQLite | `library.location → track_locations.id`, metadata, ratings/comments, available counts/dates, crates and playlists | Consistent read transaction includes WAL. Native Cue and detailed history events need further implementation. |
-| Serato UTF-8 CSV | Title/artist and other available history fields, with an explicit file-path column | Title-only exports are rejected. Native Serato databases, crates and markers are not yet supported. |
-
-Source counters/dates are retained separately rather than blindly added to local plays. Unsupported or missing data is not replaced with invented history. Moved drives and path conflicts can still require manual repair. This is not a complete importer of every variant of all four applications.
-
-### Download and installation
-
-[pre-beta 0.0.1 release](https://github.com/prospektdj/prospektdj/releases/tag/v0.0.1-prebeta) contains five packages, project source archive, corresponding GPLv3 ASIO SDK sources, screenshots and `SHA256SUMS.txt`:
-
-| Platform / package | Run or install |
-|---|---|
-| Windows 10/11 x64 ZIP | Extract and run `prospekt-dj.exe`. The application is unsigned. |
-| Linux x64 tar.gz | Extract and run `./prospekt-dj`. |
-| Debian/Ubuntu amd64 DEB | `sudo apt install ./prospekt-dj_0.0.1-prebeta_amd64.deb` |
-| Linux AppImage | `chmod +x Prospekt-DJ-*.AppImage`, then run it. Without FUSE, use `APPIMAGE_EXTRACT_AND_RUN=1`. |
-| Linux Flatpak | `flatpak install --user ./Prospekt-DJ-*.flatpak`, then `flatpak run org.prospektdj.ProspektDJ`. The runtime comes from Flathub. |
-
-Linux packages are built on Ubuntu 22.04 and require glibc 2.35+, ALSA, X11/XWayland and OpenGL/Mesa. File selection requires XDG Desktop Portal and an appropriate desktop backend. Flatpak exposes Music directly and other files through the portal. macOS is not included in this release.
-
-Use `prospekt-dj --demo` or the demo button in Settings. Drop music files/folders onto the window. **WAV/AIFF recording is native**; MP3/FLAC/Ogg/Opus requires a separate FFmpeg in PATH, beside the executable, or selected through `PROSPEKT_FFMPEG`. FFmpeg is not bundled and must be accessible inside the Flatpak environment when using that package. Conversion failure preserves the WAV.
-
-### Data, privacy and limitations
-
-- Catalog, crates and favorites are retained. `tracks.sqlite` stores Cue, user data, analysis, local history and import payloads. Settings show the configuration path. Close the application before manually copying the whole configuration directory; do not copy an active database while omitting its WAL.
-- A local play normally counts after 30 seconds on MASTER; short tracks use half their duration or the threshold, whichever is shorter. The threshold is configurable. Loading, analysis and PFL-only playback do not increment it.
-- **Artwork downloads are enabled by default.** MusicBrainz / Cover Art Archive receives public artist/album/title metadata or identifiers, never audio or private paths. Disable the option in Settings. Conservative matching can leave artwork blank. Music tags are not written.
-- SYNC performs a one-shot tempo match without beat-phase alignment. Tempo changes also change pitch. Key lock and STEMS are not implemented. Automix uses A/B.
-- WASAPI PFL requires another system output; Windows ASIO supports distinct channel pairs on one interface. Direct JACK is not implemented. The 334 MIDI profiles are not hardware certifications; 289 contain recognized bindings. Complete LED/HID output is unavailable.
-- Four decks at 1280×720 require vertical performance scrolling; library columns scroll horizontally. TRACK INFO appears in wide windows and scrolls vertically.
-- **Complete translations for all 24 EU languages are not ready.** The existing ten core-control languages remain; new workflows and some help are Polish/English. Remaining work includes fuller import/history, conflict/path resolution, UI backup/restore and fully asynchronous database bootstrap.
-- Limits: source file 100 MiB, decoded PCM up to 512 MiB; sample files 32 MiB/120 s. Sampler audio and the main CUE remain session data; Hot Cue storage is persistent. PCM identity is decoder-dependent. Multi-hour recording and physical-hardware stability need further testing.
-
-### Controls and building
-
-| Shortcut | Action |
-|---|---|
-| Q/P, A/L | Play/pause and CUE on A/B |
-| Space, Escape | Active-deck play/pause; pause all |
-| F1–F8, Shift + pad | Focused-deck Hot Cue; delete Cue/sample |
-| 1–4 / 7–0 | A/B pads according to mode |
-| Z/X, N/M | Temporary A/B pitch bend |
-| Enter / Shift+Enter | Load selection into A/B |
-| Arrows, F11 | Library selection/crossfader; fullscreen |
-
-Drag knobs/jogs, hold Shift for fine adjustment and double-click a control to reset it. Deck shortcuts are suppressed while typing and in Settings. Legacy MIDI `gain` still controls the channel fader; `pre_gain` controls the new independent GAIN stage.
-
-Rust **1.89+** is required. Linux needs `build-essential pkg-config libasound2-dev libx11-dev`; Windows needs MSVC Build Tools, Windows SDK and LLVM/libclang. Run `python scripts/prepare_asio_sdk.py --output .asio-sdk --archive-output release-dist/ASIO-SDK-2.3.4-GPL3-source.zip` and set `CPAL_ASIO_DIR` to the absolute `.asio-sdk` path. SQLite is compiled from its bundled dependency sources.
-
-```sh
-cargo fmt --all --check
-cargo test --locked
-cargo clippy --locked --all-targets -- -D warnings
-cargo build --locked --release
-```
-
-**102 local tests passed**, including CPAL through ALSA null and optional FFmpeg exports. This is not physical headphone/MIDI/VRAM/latency verification. Release CI checks Linux/Windows again, installs the DEB and runs AppImage/Flatpak startup smoke tests. [Validation](docs/TESTS.md) · [Dependency licenses](docs/DEPENDENCIES.md) · [Provenance](docs/PROVENANCE.md).
-
-Application modules: `ui.rs`/`widgets.rs` (native interface), `engine.rs`/`audio.rs`/`dsp.rs`/`effects.rs` (audio), `media.rs` (decoding/analysis), `track_store.rs`/`library_data.rs`/`dj_import.rs` (persistent data and imports), `library.rs`/`folder_tree.rs` (catalog/tree), `artwork.rs`/`emoji.rs` (graphics), `midi.rs`/`controller_import.rs` (controllers), `recording.rs`, `settings.rs`, `wave_style.rs`, `telemetry.rs` and `i18n.rs`.
+Rust ≥1.89, `cargo build --locked --release`. See [platforms and testing](docs/BUILD.md), [portable data](docs/PORTABLE-DATA.md), [Chromebook audio](docs/CHROMEBOOK-AUDIO.md) and [ASIO4ALL](docs/ASIO4ALL.md). Application code: AGPL-3.0-or-later ([LICENSE](LICENSE)); separate dependency, mapping, font and artwork notices remain in `licenses/`. LICENSE retains the verbatim canonical AGPL text.

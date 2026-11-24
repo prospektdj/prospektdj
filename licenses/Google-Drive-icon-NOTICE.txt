@@ -1,0 +1,8 @@
+Google Drive product icon
+Source: https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_48dp.png
+Retrieved: 2026-11-23
+Copyright and trademark: Google LLC.
+This unchanged product icon identifies the Google Drive integration. It is not
+covered by the AGPL license of the application source code. Google does not
+sponsor or endorse Prospekt DJ.
+Brand resource guidance: https://developers.google.com/drive/api/guides/branding

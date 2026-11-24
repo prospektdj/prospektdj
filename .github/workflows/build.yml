@@ -26,10 +26,17 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+      - name: Linux container audio bridge regression
+        if: runner.os == 'Linux'
+        env:
+          ALSA_CONFIG_PATH: ${{ github.workspace }}/tests/fixtures/alsa/broken-default.conf
+          PROSPEKT_CONFIG_DIR: ${{ runner.temp }}/prospekt-audio-bridge-test
+          PROSPEKT_TEST_BROKEN_ALSA: '1'
+        run: cargo test --locked --test audio_backend -- --test-threads=1
       - run: cargo build --locked --release
       - uses: actions/upload-artifact@v4
         with:
-          name: Prospekt-DJ-Rust-${{ runner.os }}
+          name: Prospekt-DJ-${{ runner.os }}
           path: |
             target/release/prospekt-dj
             target/release/prospekt-dj.exe

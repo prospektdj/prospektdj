@@ -395,3 +395,16 @@ pub fn matching_profiles(port: &str, profiles: &[ControllerProfile]) -> Vec<usiz
         .map(|(i, _)| i)
         .collect()
 }
+
+/// Select a device-specific mapping bank before looking up Note/CC numbers.
+pub fn mapping_bank<'a>(
+    first: &'a mut Vec<Mapping>,
+    second: &'a mut Vec<Mapping>,
+    second_device: bool,
+) -> &'a mut Vec<Mapping> {
+    if second_device {
+        second
+    } else {
+        first
+    }
+}

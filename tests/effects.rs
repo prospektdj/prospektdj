@@ -215,3 +215,38 @@ fn effects_reach_engine_output_and_survive_reload_and_restore() {
     restored.apply(Command::Restore(Box::new(empty.snapshot())));
     assert_eq!(restored.snapshot().decks[1].fx, settings);
 }
+
+#[test]
+fn effects_mode_preserves_playback_cues_and_other_decks() {
+    use prospekt_dj::engine::PadMode;
+    let mut engine = Engine::new(48000);
+    engine.apply(Command::Deck(
+        0,
+        DeckControl::Load(Arc::new(Track::from_frames(
+            "Effects mode".into(),
+            vec![[0.1; 2]; 48000],
+            48000,
+        ))),
+    ));
+    engine.apply(Command::Deck(0, DeckControl::HotCue(0, false)));
+    engine.apply(Command::Deck(0, DeckControl::Play));
+    let fx = FxSettings {
+        echo_enabled: true,
+        echo_mix: 0.7,
+        ..Default::default()
+    };
+    engine.apply(Command::Deck(0, DeckControl::Fx(fx)));
+    let before = engine.snapshot();
+    engine.apply(Command::Deck(0, DeckControl::PadMode(PadMode::Effects)));
+    engine.apply(Command::Deck(0, DeckControl::Pad(0, false)));
+    let after = engine.snapshot();
+    assert_eq!(after.decks[0].mode, PadMode::Effects);
+    assert_eq!(after.decks[0].fx, fx);
+    assert_eq!(after.decks[0].hot, before.decks[0].hot);
+    assert_eq!(after.decks[0].position, before.decks[0].position);
+    assert!(after.decks[0].playing);
+    assert_eq!(after.decks[1].mode, before.decks[1].mode);
+    assert_eq!(after.decks[1].fx, before.decks[1].fx);
+    engine.apply(Command::Deck(0, DeckControl::PadMode(PadMode::HotCue)));
+    assert_eq!(engine.snapshot().decks[0].fx, fx);
+}

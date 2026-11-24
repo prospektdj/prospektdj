@@ -1,0 +1,47 @@
+[
+  {
+    "path": "assets/fonts/DejaVuSans-Bold.ttf",
+    "sha256": "a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890",
+    "bytes": 708920
+  },
+  {
+    "path": "assets/fonts/NimbusSans-Bold.otf",
+    "sha256": "7f33328e6b4d4cd21b45fa625791928c9407dc702db6780e56b09ca9a3ecaa67",
+    "bytes": 83264
+  },
+  {
+    "path": "assets/fonts/NimbusSans-Regular.otf",
+    "sha256": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08",
+    "bytes": 82264
+  },
+  {
+    "path": "assets/fonts/NotoEmoji.ttf",
+    "sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
+    "bytes": 1982596
+  },
+  {
+    "path": "assets/fonts/NotoSansArabic.ttf",
+    "sha256": "504d7407d86875acf7d04dfaa0fd7524d0b8797723bc4aa18022f29db25b0b6e",
+    "bytes": 244072
+  },
+  {
+    "path": "assets/fonts/NotoSansBengali.ttf",
+    "sha256": "9bb35b3547829ecc42041b6017e87fd4c5f1da1edcd00f59171777050f346018",
+    "bytes": 201964
+  },
+  {
+    "path": "assets/fonts/NotoSansDevanagari.ttf",
+    "sha256": "79a470365ccb210fa3c7d8d8ff2e005ef9d983cfd067f735a0caf7e15070ca9f",
+    "bytes": 229336
+  },
+  {
+    "path": "assets/fonts/ProspektChinese.otf",
+    "sha256": "bdf67b2f9e793274567e30dc3ce095061758f84735153e478f8b520fb8cb275b",
+    "bytes": 138168
+  },
+  {
+    "path": "assets/fonts/SedgwickAveDisplay-Regular.ttf",
+    "sha256": "3b9c295a146bafb93c8a12c1dde38a2fe47512777daf1458825e291752469a38",
+    "bytes": 140148
+  }
+]

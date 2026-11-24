@@ -36,3 +36,19 @@ pub mod theme;
 pub mod recommendations;
 
 pub mod microphone;
+
+pub mod history;
+
+pub mod storage;
+
+pub mod broadcast;
+
+pub mod portable;
+
+pub mod metadata_preview;
+
+pub mod file_actions;
+
+pub mod recommendation_log;
+
+pub mod google_drive;

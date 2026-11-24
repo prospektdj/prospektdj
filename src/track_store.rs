@@ -8,7 +8,7 @@ use std::{collections::HashMap, path::Path, thread::JoinHandle};
 pub type CueBank = [Option<f64>; 8];
 enum Write {
     Cues(String, CueBank),
-    Play(String, String),
+    Play(String, String, Option<crate::history::Play>),
     Flush(Sender<Result<(), String>>),
 }
 pub struct Store {
@@ -61,6 +61,11 @@ impl Store {
         let (error_tx, errors) = unbounded();
         let failed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_failed = failed.clone();
+        let history_root = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("history");
+        let history_session = crate::history::session().clone();
         let worker = std::thread::spawn(move || {
             let mut failure = None;
             for write in rx {
@@ -76,11 +81,27 @@ impl Store {
                             failure = Some(error);
                         }
                     }
-                    Write::Play(event, id) => {
-                        if let Err(error) = connection.execute(
-                            "INSERT OR IGNORE INTO plays VALUES(?1,?2,unixepoch())",
-                            params![event, id],
-                        ) {
+                    Write::Play(event, id, details) => {
+                        let result = connection
+                            .execute(
+                                "INSERT OR IGNORE INTO plays VALUES(?1,?2,unixepoch())",
+                                params![event, id],
+                            )
+                            .map_err(anyhow::Error::from)
+                            .and_then(|inserted| {
+                                if inserted > 0 {
+                                    if let Some(mut details) = details {
+                                        details.played_at = chrono::Local::now().to_rfc3339();
+                                        crate::history::append(
+                                            &history_root,
+                                            &history_session,
+                                            &details,
+                                        )?;
+                                    }
+                                }
+                                Ok(())
+                            });
+                        if let Err(error) = result {
                             worker_failed.store(true, std::sync::atomic::Ordering::Relaxed);
                             let error = error.to_string();
                             let _ = error_tx.send(error.clone());
@@ -108,7 +129,16 @@ impl Store {
     }
     pub fn play(&self, event: String, id: String) {
         if let Some(tx) = &self.tx {
-            let _ = tx.send(Write::Play(event, id));
+            let _ = tx.send(Write::Play(event, id, None));
+        }
+    }
+    pub fn play_details(&self, event: crate::history::Play) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Write::Play(
+                event.event_id.clone(),
+                event.track_id.clone(),
+                Some(event),
+            ));
         }
     }
     pub fn cues(&self, id: &str, bank: CueBank) {

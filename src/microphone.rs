@@ -25,7 +25,7 @@ impl Microphone {
 pub fn input_names() -> Result<Vec<String>> {
     let mut names: Vec<_> = cpal::default_host()
         .input_devices()?
-        .filter_map(|d| d.description().ok().map(|d| d.name().to_owned()))
+        .map(|d| crate::audio::device_name(&d))
         .collect();
     names.sort();
     names.dedup();
@@ -62,16 +62,40 @@ impl Resampler {
     }
 }
 pub fn start(name: &str, output_rate: u32) -> Result<(Microphone, Receiver<Frame>)> {
+    let first = start_device(name, output_rate);
+    #[cfg(target_os = "linux")]
+    if let Err(original) = first {
+        let mut failures = vec![format!("{original:#}")];
+        for bridge in crate::audio::linux_bridge_candidates(input_names().unwrap_or_default()) {
+            if bridge == name {
+                continue;
+            }
+            match start_device(&bridge, output_rate) {
+                Ok(input) => return Ok(input),
+                Err(error) => failures.push(format!("{bridge}: {error:#}")),
+            }
+        }
+        anyhow::bail!(
+            "Mikrofon ALSA: {}. Sprawdź most PulseAudio/PipeWire i uprawnienia mikrofonu ChromeOS.",
+            failures.join(" | ")
+        );
+    } else {
+        first
+    }
+    #[cfg(not(target_os = "linux"))]
+    first
+}
+fn start_device(name: &str, output_rate: u32) -> Result<(Microphone, Receiver<Frame>)> {
     let host = cpal::default_host();
     let device = if name.is_empty() {
         host.default_input_device()
             .context("Brak domyślnego mikrofonu")?
     } else {
         host.input_devices()?
-            .find(|d| d.description().ok().is_some_and(|d| d.name() == name))
+            .find(|d| crate::audio::device_matches(d, name))
             .context("Wybrany mikrofon jest niedostępny")?
     };
-    let device_name = device.description()?.name().to_owned();
+    let device_name = crate::audio::device_name(&device);
     let supported = device
         .default_input_config()
         .context("Brak konfiguracji wejścia mikrofonu")?;
