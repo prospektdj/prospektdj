@@ -152,3 +152,46 @@ jobs:
             release-dist/windows7-*.log
             release-dist/*windows7*.zip
           if-no-files-found: error
+
+  publish:
+    name: Publish release with all packages
+    needs: [build, windows7]
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: release-assets
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: experimental-windows7-*
+          path: windows7-assets
+          merge-multiple: true
+      - name: Assemble release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Experimental Windows 7 packages are added only when they were produced.
+          find windows7-assets -name "*.zip" -exec cp {} release-assets/ \; 2>/dev/null || true
+          cp docs/screenshots/*.png release-assets/
+          VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          git archive --format=zip --prefix="Prospekt-DJ-${VERSION}-source/" HEAD -o "release-assets/Prospekt-DJ-${VERSION}-source.zip"
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=v0.0.1-prebeta
+          # Replace the previous pre-beta release and its tag.
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Prospekt DJ — pre-beta 0.0.1 (aktualizacja / update)" --notes-file docs/RELEASE.md
