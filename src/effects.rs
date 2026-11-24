@@ -346,13 +346,13 @@ impl Effects {
         }
         let mut out = input;
         if s.filter_enabled && s.filter.abs() > 0.005 {
-            for c in 0..2 {
-                self.low[0][c] += self.filter_alpha * (out[c] - self.low[0][c]);
+            for (c, sample) in out.iter_mut().enumerate() {
+                self.low[0][c] += self.filter_alpha * (*sample - self.low[0][c]);
                 self.low[1][c] += self.filter_alpha * (self.low[0][c] - self.low[1][c]);
-                out[c] = if s.filter < 0. {
+                *sample = if s.filter < 0. {
                     self.low[1][c]
                 } else {
-                    out[c] - self.low[0][c]
+                    *sample - self.low[0][c]
                 };
             }
         }

@@ -4833,11 +4833,11 @@ impl Studio {
                     }
                 }
                 response.on_hover_text(format!("{}\nKliknij, aby wskazać w bibliotece. Dopasowanie lokalne na podstawie BPM, tonacji i gatunku; brakujące dane nie są zgadywane.", s.reason));
-                for deck in 0..self.settings.deck_count {
+                for (deck, accent) in ACCENTS.iter().copied().enumerate().take(self.settings.deck_count) {
                     let button = egui::Button::new(
                         RichText::new(letter(deck)).size(14.)
                             .family(egui::FontFamily::Name("Arial Bold".into()))
-                            .color(ACCENTS[deck]),
+                            .color(accent),
                     ).min_size(Vec2::new(30., 28.)).corner_radius(prospekt_dj::theme::radius());
                     if ui.add_enabled(!self.loading[deck], button)
                         .on_hover_text(format!("Załaduj rekomendowany utwór na kanał {}", letter(deck)))
@@ -6945,7 +6945,12 @@ impl Studio {
                                     ui.visuals().weak_text_color(),
                                 );
                             }
-                            for d in 0..self.settings.deck_count {
+                            for (d, accent) in ACCENTS
+                                .iter()
+                                .copied()
+                                .enumerate()
+                                .take(self.settings.deck_count)
+                            {
                                 let loaded = self.snapshot.decks[d]
                                     .track
                                     .as_ref()
@@ -6954,9 +6959,13 @@ impl Studio {
                                 if ui
                                     .add_enabled(
                                         !entry.missing,
-                                        egui::Button::new(RichText::new(letter(d)).color(
-                                            if loaded { ACCENTS[d] } else { Color32::GRAY },
-                                        ))
+                                        egui::Button::new(
+                                            RichText::new(letter(d)).color(if loaded {
+                                                accent
+                                            } else {
+                                                Color32::GRAY
+                                            }),
+                                        )
                                         .min_size(Vec2::new(30., 20.)),
                                     )
                                     .clicked()
