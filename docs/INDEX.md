@@ -13,6 +13,7 @@ Current **pre-alpha 0.0.1 test** documentation. Each guide includes Polish and E
 - 📖 [BUILD](BUILD.md)
 - 📖 [CHROMEBOOK-AUDIO](CHROMEBOOK-AUDIO.md)
 - 📖 [CONTROLLER-DETECTION](CONTROLLER-DETECTION.md)
+- 📖 [CONTROLS](CONTROLS.md) — sterowanie i nowe funkcje / controls and new features
 - 📖 [DEPENDENCIES](DEPENDENCIES.md)
 - 📖 [DUAL-MIDI](DUAL-MIDI.md)
 - 📖 [FILE-ACTIONS](FILE-ACTIONS.md)
@@ -24,5 +25,6 @@ Current **pre-alpha 0.0.1 test** documentation. Each guide includes Polish and E
 - 📖 [PROVENANCE](PROVENANCE.md)
 - 📖 [RECOMMENDATION-HISTORY](RECOMMENDATION-HISTORY.md)
 - 📖 [RELEASE](RELEASE.md)
+- 📖 [SKINS](SKINS.md) — skórki / skins
 - 📖 [STORAGE-BROWSER](STORAGE-BROWSER.md)
 - 📖 [TESTS](TESTS.md)
