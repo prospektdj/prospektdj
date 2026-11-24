@@ -3,3 +3,5 @@ Copyright (c) Prospekt DJ contributors.
 Original application code: AGPL-3.0-or-later; see ../LICENSE.
 PL: Kod programu na licencji AGPL-3.0-or-later. Biblioteki, mapowania, fonty i grafiki zachowują odrębne licencje oraz informacje o autorach.
 EN: Dependencies, mappings, fonts and artwork retain their own licenses and attribution.
+PL: Niektóre pomysły na funkcje (zakresy suwaka tempa, krzywe suwaka krzyżowego, SLIP, BRAKE, sloty pętli) zainspirowano projektem OpenFadeR (AGPL-3.0-or-later). Kod został napisany od nowa; nie skopiowano kodu ani plików motywów. Kolory skórek Dracula, Nord, Gruvbox Dark i Tokyo Night są przybliżeniem znanych palet, nie kopią plików motywów.
+EN: Some feature ideas (tempo fader ranges, crossfader curves, SLIP, BRAKE, loop slots) were inspired by the OpenFadeR project (AGPL-3.0-or-later). The code was written from scratch; no code or theme files were copied. The Dracula, Nord, Gruvbox Dark and Tokyo Night skin colors approximate well-known palettes and are not copies of theme files.

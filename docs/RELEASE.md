@@ -1,5 +1,29 @@
 # Prospekt DJ — pre-alpha 0.0.1 test
 
+## Zmiany po wydaniu 0.0.1 / Changes after 0.0.1 (nieopublikowane / unreleased)
+
+### 🇵🇱 Polski
+
+- SYNC dopasowuje tempo i fazę bitów na podstawie wykrytej siatki; wybiera połowę lub podwójne tempo, jeśli to bliżej 0 %.
+- KEYLOCK: zmiana tempa bez zmiany tonacji (eksperymentalna).
+- Suwak TEMPO w skórkach nowoczesnych (zakres ±6 %, ±10 %, ±16 %, ±50 %), krzywe suwaka krzyżowego (Smooth, Sharp, Const) i jego wyłącznik, skoki o takty.
+- SLIP, BRK (hamowanie), QNT (Hot Cue na siatce) i sloty pętli L1–L4 w skórkach nowoczesnych.
+- Osiem skórek nowoczesnych z ciemnymi tłami oraz skórka Oryginalna; skrócone napisy w górnym pasku we wszystkich skórkach.
+- Karty kanałów w mikserze z literami A/B przy suwaku krzyżowym.
+- Testy: `cargo test --locked` (156 testów).
+
+### 🇬🇧 English
+
+- SYNC matches tempo and beat phase from the detected grid; it picks half or double tempo when that is closer to 0 %.
+- KEYLOCK: change tempo without changing key (experimental).
+- TEMPO fader in the modern skins (±6 %, ±10 %, ±16 %, ±50 % ranges), crossfader curves (Smooth, Sharp, Const) with an on/off switch, beat jumps.
+- SLIP, BRK (brake), QNT (hot cues on the beat grid) and loop slots L1–L4 in the modern skins.
+- Eight modern skins with dark backgrounds, plus the Original skin; short header labels in every skin.
+- Mixer channel cards with A/B labels on the crossfader.
+- Tests: `cargo test --locked` (156 tests).
+
+---
+
 ## 🇵🇱 Polski
 
 - Dwa lub cztery deki, powiększone jogi czarne/białe, animowana wskazówka, pitch bend i PLAY/CUE/SYNC. Chwilowy reverse i potwierdzane wysuwanie utworu.
