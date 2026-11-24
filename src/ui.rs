@@ -677,6 +677,8 @@ impl Studio {
         studio.snapshot.deck_count = studio.settings.deck_count;
         studio.restart_audio();
         studio.send(Command::HistoryThreshold(studio.settings.history_threshold));
+        studio.send(Command::CrossCurve(studio.settings.cross_curve));
+        studio.send(Command::CrossEnabled(studio.settings.cross_enabled));
         let mut initial_paths = studio.library.clone();
         initial_paths.extend(studio.catalog.roots.iter().cloned());
         if !initial_paths.is_empty() {
@@ -2404,12 +2406,55 @@ impl Studio {
             });
         });
     }
+    /// Persistent tempo fader for modern skins; its range comes from settings.
+    fn tempo_fader(&mut self, ui: &mut egui::Ui, i: usize) {
+        let range = prospekt_dj::engine::tempo_range(self.settings.tempo_range);
+        let rate = self.snapshot.decks[i].rate;
+        let mut value = ((rate - 1.) / range * 100.).clamp(-100., 100.);
+        ui.spacing_mut().item_spacing.y = 2.;
+        ui.label(RichText::new("TEMPO").size(7.).weak());
+        ui.label(
+            RichText::new(format!("±{:.0}%", range * 100.))
+                .size(8.)
+                .color(ACCENTS[i]),
+        );
+        ui.spacing_mut().slider_width = 112.;
+        let response = egui::Frame::new()
+            .fill(prospekt_dj::theme::palette().panel)
+            .stroke(Stroke::new(1_f32, prospekt_dj::theme::palette().edge))
+            .corner_radius(prospekt_dj::theme::radius_f(3.))
+            .inner_margin(3)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(&mut value, -100.0..=100.)
+                        .vertical()
+                        .show_value(false),
+                )
+            })
+            .inner;
+        if response.changed() {
+            self.deck(i, DeckControl::Rate(1. + value / 100. * range));
+        }
+        if response.double_clicked() {
+            self.deck(i, DeckControl::Rate(1.));
+        }
+        response.on_hover_text("Suwak tempa · dwuklik = 0 %. Chwilowy bend: przyciski − / +");
+        ui.label(
+            RichText::new(format!("{:+.1}%", (rate - 1.) * 100.))
+                .monospace()
+                .size(8.),
+        );
+    }
     fn pitch_bend(&mut self, ui: &mut egui::Ui, i: usize) {
         ui.allocate_ui_with_layout(
             Vec2::new(32., 174.),
             egui::Layout::top_down(Align::Center),
             |ui| {
                 ui.set_width(32.);
+                if !prospekt_dj::theme::classic() {
+                    self.tempo_fader(ui, i);
+                    return;
+                }
                 ui.spacing_mut().item_spacing.y = 2.;
                 ui.label(RichText::new("PITCH").size(7.).weak());
                 ui.label(RichText::new("BEND").size(8.).color(ACCENTS[i]));
@@ -2452,7 +2497,11 @@ impl Studio {
         let (mouse, focused) = ctx.input(|input| (input.pointer.primary_down(), input.focused));
         for i in 0..4 {
             let value = prospekt_dj::music_view::momentary_bend(
-                self.bend_slider[i],
+                if prospekt_dj::theme::classic() {
+                    self.bend_slider[i]
+                } else {
+                    0.
+                },
                 self.bend_buttons[i],
                 self.bend_keys[i],
                 mouse && !self.library_focus,
@@ -2612,7 +2661,18 @@ impl Studio {
             ),
             (
                 -13.,
-                format!("{:+.1}%   ±50%", (d.rate - 1.) * 100.),
+                format!(
+                    "{:+.1}%   {}",
+                    (d.rate - 1.) * 100.,
+                    if prospekt_dj::theme::classic() {
+                        "±50%".to_string()
+                    } else {
+                        format!(
+                            "±{:.0}%",
+                            prospekt_dj::engine::tempo_range(self.settings.tempo_range) * 100.
+                        )
+                    }
+                ),
                 10.,
                 text,
             ),
@@ -3015,6 +3075,21 @@ impl Studio {
                 self.deck(i, DeckControl::LoopOff);
             }
         });
+        if !prospekt_dj::theme::classic() {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
+                for (label, beats) in [("◀4", -4_f64), ("◀1", -1_f64), ("1▶", 1_f64), ("4▶", 4_f64)]
+                {
+                    if ui
+                        .add_sized([22., 16.], egui::Button::new(RichText::new(label).size(8.)))
+                        .on_hover_text(format!("Skok o {} takt(y)", beats.abs()))
+                        .clicked()
+                    {
+                        self.deck(i, DeckControl::BeatJump(beats));
+                    }
+                }
+            });
+        }
     }
     fn cue_pads(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
         if d.mode == PadMode::Effects {
@@ -3693,7 +3768,8 @@ impl Studio {
                         if !classic {
                             ui.label(RichText::new("A").strong().size(10.).color(ACCENTS[start]));
                         }
-                        let slider = ui.add(
+                        let slider = ui.add_enabled(
+                            self.settings.cross_enabled,
                             egui::Slider::new(&mut cross, 0.0..=1.)
                                 .trailing_fill(false)
                                 .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.35 })
@@ -8077,6 +8153,52 @@ impl Studio {
                     if ui.checkbox(&mut self.settings.light,tr("Tryb jasny")).changed(){console_theme(ctx,self.settings.light);}
                     ui.horizontal(|ui|{ui.label("Skórka:");let before=self.settings.skin;egui::ComboBox::from_id_salt(("skin",ui.id())).selected_text(self.settings.skin.name()).show_ui(ui,|ui|{for (skin,name) in prospekt_dj::theme::Skin::ALL{ui.selectable_value(&mut self.settings.skin,skin,name);}});if before!=self.settings.skin{prospekt_dj::theme::set_skin(self.settings.skin);console_theme(ctx,self.settings.light);}});
                     ui.checkbox(&mut self.settings.reduced_motion,"Ogranicz animacje");
+                    ui.separator();
+                    ui.heading("Mikser i deki");
+                    ui.horizontal(|ui| {
+                        ui.label("Zakres suwaka tempa:");
+                        egui::ComboBox::from_id_salt("tempo-range")
+                            .selected_text(format!(
+                                "±{:.0}%",
+                                prospekt_dj::engine::tempo_range(self.settings.tempo_range) * 100.
+                            ))
+                            .show_ui(ui, |ui| {
+                                for index in 0..prospekt_dj::engine::TEMPO_RANGES.len() {
+                                    let pct = prospekt_dj::engine::tempo_range(index as u8) * 100.;
+                                    ui.selectable_value(
+                                        &mut self.settings.tempo_range,
+                                        index as u8,
+                                        format!("±{pct:.0}%"),
+                                    );
+                                }
+                            });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Krzywa suwaka krzyżowego:");
+                        let before = self.settings.cross_curve;
+                        egui::ComboBox::from_id_salt("cross-curve")
+                            .selected_text(
+                                prospekt_dj::dsp::CrossCurve::ALL
+                                    .iter()
+                                    .find(|(c, _)| *c == self.settings.cross_curve)
+                                    .map_or("", |(_, name)| name),
+                            )
+                            .show_ui(ui, |ui| {
+                                for (curve, name) in prospekt_dj::dsp::CrossCurve::ALL {
+                                    ui.selectable_value(&mut self.settings.cross_curve, curve, name);
+                                }
+                            });
+                        if before != self.settings.cross_curve {
+                            self.send(Command::CrossCurve(self.settings.cross_curve));
+                        }
+                    });
+                    if ui
+                        .checkbox(&mut self.settings.cross_enabled, "Suwak krzyżowy włączony")
+                        .on_hover_text("Wyłączony: obie strony miksu są otwarte, a suwak nic nie zmienia")
+                        .changed()
+                    {
+                        self.send(Command::CrossEnabled(self.settings.cross_enabled));
+                    }
                     ui.add_enabled(!self.settings.reduced_motion, egui::Checkbox::new(&mut self.settings.blink_paused_play,"Miganie PLAY co pół sekundy, gdy utwór jest zatrzymany"));
                     ui.checkbox(&mut self.settings.show_statistics,"Statystyki systemowe");
                     ui.add(egui::Slider::new(&mut self.settings.refresh_hz,10..=120).text("Limit odświeżania / Hz"));

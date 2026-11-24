@@ -1,5 +1,5 @@
 use crate::{
-    dsp::{cross_gains, Biquad, PitchShifter},
+    dsp::{cross_curve_gains, Biquad, CrossCurve, PitchShifter},
     effects::{Effects, FxParam, FxSettings, FxSwitch},
     media::{Frame, Track},
     recording::{Block, CaptureSink, BLOCK_SIZE},
@@ -151,6 +151,8 @@ pub enum DeckControl {
     KeyLock,
     Jog(f64, f64),
     Bend(f64),
+    /// Jump by a number of beats (negative = back), using the track's BPM.
+    BeatJump(f64),
 }
 pub enum Command {
     DeckCount(usize),
@@ -182,6 +184,8 @@ pub enum Command {
     PauseAll,
     Barrier(Sender<()>),
     HistoryThreshold(f64),
+    CrossCurve(CrossCurve),
+    CrossEnabled(bool),
     ImportedCues(String, crate::track_store::CueBank, (u64, u64)),
     Restore(Box<Snapshot>),
 }
@@ -246,6 +250,8 @@ pub struct Engine {
     decks: [Deck; 4],
     pub sample_rate: u32,
     pub cross: f32,
+    cross_curve: CrossCurve,
+    cross_enabled: bool,
     pub master: f32,
     phones: f32,
     sample_volume: f32,
@@ -280,6 +286,8 @@ impl Engine {
             decks: std::array::from_fn(|_| Deck::new(sample_rate)),
             sample_rate,
             cross: 0.5,
+            cross_curve: CrossCurve::Smooth,
+            cross_enabled: true,
             master: 0.75,
             phones: 0.7,
             sample_volume: 0.8,
@@ -355,6 +363,8 @@ impl Engine {
                     }
                 }
             }
+            Command::CrossCurve(curve) => self.cross_curve = curve,
+            Command::CrossEnabled(enabled) => self.cross_enabled = enabled,
             Command::HistoryThreshold(seconds) => {
                 self.history_threshold = if seconds.is_finite() {
                     seconds.clamp(1., 300.)
@@ -508,6 +518,7 @@ impl Engine {
                 | DeckControl::Pad(..)
                 | DeckControl::Pause
                 | DeckControl::Toggle
+                | DeckControl::BeatJump(_)
         ) {
             if let Some(position) = d.slip_frame.take() {
                 d.frame = position;
@@ -629,6 +640,20 @@ impl Engine {
                 if let (Some(t), true) = (&d.view.track, s.is_finite()) {
                     d.frame = s.clamp(0., t.duration()) * t.sample_rate as f64;
                     if d.view.loop_range.is_some_and(|(a, b)| s < a || s >= b) {
+                        d.view.loop_range = None;
+                    }
+                }
+            }
+            DeckControl::BeatJump(beats) if beats.is_finite() => {
+                if let Some(t) = &d.view.track {
+                    let bpm = sane_bpm(d.view.bpm);
+                    let seconds = (d.frame / t.sample_rate as f64 + beats * 60. / bpm)
+                        .clamp(0., t.duration());
+                    d.frame = seconds * t.sample_rate as f64;
+                    if d.view
+                        .loop_range
+                        .is_some_and(|(a, b)| seconds < a || seconds >= b)
+                    {
                         d.view.loop_range = None;
                     }
                 }
@@ -858,7 +883,17 @@ impl Engine {
                 self.fade = None;
             }
         }
-        let gains = cross_gains(self.cross, linear);
+        // Automix fades stay linear; with the crossfader switched off both sides stay open.
+        let curve = if linear {
+            CrossCurve::Const
+        } else {
+            self.cross_curve
+        };
+        let gains = if self.cross_enabled {
+            cross_curve_gains(self.cross, curve)
+        } else {
+            [1., 1.]
+        };
         let mut out = [0.; 2];
         let mut phones = [0.; 2];
         for (i, d) in self.decks.iter_mut().take(self.deck_count).enumerate() {
@@ -1137,6 +1172,12 @@ pub fn offline(rx: Receiver<Command>, view: Arc<Mutex<Snapshot>>, stop: Receiver
     }
 }
 pub type CommandSender = Sender<Command>;
+
+/// Tempo fader ranges selectable in settings: ±6 %, ±10 %, ±16 %, ±50 %.
+pub const TEMPO_RANGES: [f64; 4] = [0.06, 0.10, 0.16, 0.50];
+pub fn tempo_range(index: u8) -> f64 {
+    TEMPO_RANGES[(index as usize).min(TEMPO_RANGES.len() - 1)]
+}
 
 /// Track BPM from tags or detection may be missing; loops and samples divide by it.
 pub fn sane_bpm(bpm: f64) -> f64 {

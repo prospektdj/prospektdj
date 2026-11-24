@@ -71,6 +71,33 @@ impl Biquad {
     }
 }
 
+/// Crossfader curve, chosen in settings. `Smooth` is the original equal-power curve.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum CrossCurve {
+    #[default]
+    Smooth,
+    Sharp,
+    Const,
+}
+impl CrossCurve {
+    pub const ALL: [(Self, &'static str); 3] = [
+        (Self::Smooth, "Smooth"),
+        (Self::Sharp, "Sharp"),
+        (Self::Const, "Const"),
+    ];
+}
+
+/// Gains for the A (index 0) and B (index 1) sides at crossfader position `value` (0..1).
+/// `Sharp` keeps both sides fully open across the middle and cuts them near the edges.
+pub fn cross_curve_gains(value: f32, curve: CrossCurve) -> [f32; 2] {
+    let x = value.clamp(0., 1.);
+    match curve {
+        CrossCurve::Smooth => cross_gains(x, false),
+        CrossCurve::Const => [1. - x, x],
+        CrossCurve::Sharp => [(2. * (1. - x)).min(1.), (2. * x).min(1.)],
+    }
+}
+
 pub fn cross_gains(value: f32, linear: bool) -> [f32; 2] {
     let x = value.clamp(0., 1.);
     if linear {

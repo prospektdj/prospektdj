@@ -12,14 +12,22 @@ pub enum Skin {
     Carbon,
     Midnight,
     Neon,
+    Dracula,
+    Nord,
+    Gruvbox,
+    TokyoNight,
 }
 impl Skin {
-    pub const ALL: [(Self, &'static str); 5] = [
+    pub const ALL: [(Self, &'static str); 9] = [
         (Self::Modern, "Nowoczesna"),
         (Self::Classic, "Oryginalna (100%, sprzed zmian)"),
         (Self::Carbon, "Carbon"),
         (Self::Midnight, "Midnight"),
         (Self::Neon, "Neon"),
+        (Self::Dracula, "Dracula"),
+        (Self::Nord, "Nord"),
+        (Self::Gruvbox, "Gruvbox Dark"),
+        (Self::TokyoNight, "Tokyo Night"),
     ];
     pub fn name(self) -> &'static str {
         Self::ALL
@@ -53,6 +61,10 @@ pub fn skin() -> Skin {
         2 => Skin::Carbon,
         3 => Skin::Midnight,
         4 => Skin::Neon,
+        5 => Skin::Dracula,
+        6 => Skin::Nord,
+        7 => Skin::Gruvbox,
+        8 => Skin::TokyoNight,
         _ => Skin::Modern,
     }
 }
@@ -91,6 +103,46 @@ pub fn palette() -> Palette {
             focus: rgb(156, 60, 230),
             focus_text: rgb(230, 180, 255),
             row_alt: rgb(29, 20, 42),
+        },
+        Skin::Dracula => Palette {
+            deck_bg: rgb(33, 34, 44),
+            panel: rgb(40, 42, 54),
+            raised: rgb(68, 71, 90),
+            raised_hover: rgb(82, 86, 110),
+            edge: rgb(98, 114, 164),
+            focus: rgb(189, 147, 249),
+            focus_text: rgb(224, 204, 255),
+            row_alt: rgb(45, 47, 61),
+        },
+        Skin::Nord => Palette {
+            deck_bg: rgb(36, 41, 51),
+            panel: rgb(46, 52, 64),
+            raised: rgb(59, 66, 82),
+            raised_hover: rgb(67, 76, 94),
+            edge: rgb(76, 86, 106),
+            focus: rgb(136, 192, 208),
+            focus_text: rgb(143, 188, 187),
+            row_alt: rgb(53, 60, 74),
+        },
+        Skin::Gruvbox => Palette {
+            deck_bg: rgb(29, 32, 33),
+            panel: rgb(40, 40, 40),
+            raised: rgb(60, 56, 54),
+            raised_hover: rgb(80, 73, 69),
+            edge: rgb(102, 92, 84),
+            focus: rgb(250, 189, 47),
+            focus_text: rgb(250, 189, 47),
+            row_alt: rgb(50, 48, 47),
+        },
+        Skin::TokyoNight => Palette {
+            deck_bg: rgb(22, 22, 30),
+            panel: rgb(26, 27, 38),
+            raised: rgb(36, 40, 59),
+            raised_hover: rgb(41, 46, 66),
+            edge: rgb(59, 66, 97),
+            focus: rgb(122, 162, 247),
+            focus_text: rgb(125, 207, 255),
+            row_alt: rgb(31, 35, 53),
         },
         // Classic only uses these where the original code had no color.
         Skin::Modern | Skin::Classic => Palette {
