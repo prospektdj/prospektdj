@@ -68,7 +68,7 @@ pub fn properties(path: &Path) -> Result<()> {
         std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", "$p=$env:PROSPEKT_PROPERTIES_PATH; $s=New-Object -ComObject Shell.Application; $f=$s.Namespace((Split-Path -LiteralPath $p)); $f.ParseName([System.IO.Path]::GetFileName($p)).InvokeVerb('properties')"])
             .env("PROSPEKT_PROPERTIES_PATH", path).spawn()?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(target_os = "macos")]
     {

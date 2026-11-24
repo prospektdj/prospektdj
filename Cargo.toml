@@ -55,3 +55,8 @@ debug = 0
 
 [profile.test]
 debug = 0
+
+[profile.dev.package.cpal]
+# cpal's ALSA timestamp code multiplies seconds by 1e9 in i32 on 32-bit Linux;
+# debug builds would panic on the i686 CI runner. Release builds already wrap.
+overflow-checks = false
