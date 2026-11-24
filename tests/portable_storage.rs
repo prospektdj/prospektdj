@@ -28,6 +28,8 @@ fn migration_keeps_comments_and_wal_data_without_overwriting_portable_settings()
     drop(db);
     std::fs::remove_dir_all(root).unwrap();
 }
+// Linux package layouts (AppImage, Flatpak, system packages) only exist on Linux.
+#[cfg(target_os = "linux")]
 #[test]
 fn linux_formats_share_a_single_writable_data_root() {
     use prospekt_dj::portable::linux_root;
