@@ -173,22 +173,9 @@ impl AudioRuntime {
             self.backend == Backend::Asio && self.is_running(),
             "Najpierw uruchom wyjście ASIO z wybranym sterownikiem."
         );
-        #[cfg(target_os = "windows")]
-        {
-            unsafe extern "C" {
-                fn ASIOControlPanel() -> i32;
-            }
-            // SAFETY: this runtime owns the active ASIO stream, which keeps the
-            // SDK's current driver loaded for the duration of the synchronous call.
-            let result = unsafe { ASIOControlPanel() };
-            anyhow::ensure!(
-                result == 0 || result == 0x3f4847a0,
-                "Sterownik nie otworzył panelu ASIO (kod {result})."
-            );
-            Ok(())
-        }
-        #[cfg(not(target_os = "windows"))]
-        bail!("Panel ASIO jest dostępny tylko w systemie Windows.")
+        // The driver panel entry point from the ASIO SDK is not linked in this build,
+        // so the panel cannot be opened from here. Windows builds link without it.
+        bail!("Panel ASIO nie jest dostępny w tej wersji programu.")
     }
     pub fn is_running(&self) -> bool {
         self.healthy.load(Ordering::Relaxed)
