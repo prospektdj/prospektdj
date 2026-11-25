@@ -376,6 +376,7 @@ pub struct Studio {
     sidebar_cover_reflection: Option<egui::Rect>,
     cover_reflection_left: f32,
     deck_drop_rects: [egui::Rect; 4],
+    deck_rows_height: f32,
     preview_path: Option<PathBuf>,
     preview_token: u64,
     preview_loading: bool,
@@ -608,6 +609,7 @@ impl Studio {
             sidebar_cover_reflection: None,
             cover_reflection_left: 0.,
             deck_drop_rects: [egui::Rect::NOTHING; 4],
+            deck_rows_height: 180.,
             preview_path: None,
             preview_token: 0,
             preview_loading: false,
@@ -2002,27 +2004,11 @@ impl Studio {
             });
         });
     }
-    fn decks_ui(&mut self, ui: &mut egui::Ui) -> f32 {
-        self.header_cover_reflection = None;
-        if self.settings.cover_strip && self.settings.cover_reflections {
-            ui.add_space(6.);
-            let width = ui
-                .available_width()
-                .min(ui.clip_rect().right() - ui.cursor().left());
-            let (rect, _) =
-                ui.allocate_exact_size(Vec2::new(width, 2. * 72. / 20.), Sense::hover());
-            self.header_cover_reflection = Some(egui::Rect::from_min_max(
-                egui::pos2(ui.ctx().screen_rect().left(), rect.top()),
-                egui::pos2(ui.ctx().screen_rect().right(), rect.bottom()),
-            ));
-            ui.add_space(6.);
-        }
-
+    /// Deck row (two decks around the mixer), drawn at full size.
+    fn deck_rows(&mut self, ui: &mut egui::Ui, deck_spacing: Vec2) {
         self.deck_drop_rects = [egui::Rect::NOTHING; 4];
         let middle = 202.;
         let width = ((ui.available_width() - middle) / 2.).max(300.);
-        let deck_spacing = ui.spacing().item_spacing;
-        ui.spacing_mut().item_spacing.y = 0.;
         for row in 0..self.settings.deck_count / 2 {
             let row_background = ui.painter().add(egui::Shape::Noop);
             let mixer_background = ui.painter().add(egui::Shape::Noop);
@@ -2079,6 +2065,59 @@ impl Studio {
                     prospekt_dj::theme::row_bg(),
                 ),
             );
+        }
+    }
+    /// Modern skins draw the deck rows at 90 % in their own layer, centred in the
+    /// available width. Drop targets are converted to screen coordinates.
+    fn scaled_deck_rows(&mut self, ui: &mut egui::Ui, deck_spacing: Vec2) {
+        const DECK_SCALE: f32 = 0.9;
+        let origin = ui.next_widget_position();
+        let width = ui.available_width();
+        let layer = egui::LayerId::new(ui.layer_id().order, ui.id().with("deck-rows-scaled"));
+        ui.ctx().set_sublayer(ui.layer_id(), layer);
+        let logical = egui::Rect::from_min_size(origin, Vec2::new(width, self.deck_rows_height));
+        let mut child = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(logical));
+        child.set_clip_rect(logical);
+        self.deck_rows(&mut child, deck_spacing);
+        let used = (child.min_rect().bottom() - origin.y).max(1.);
+        self.deck_rows_height = used;
+        let to_global = egui::emath::TSTransform::new(
+            egui::vec2(
+                origin.x * (1. - DECK_SCALE) + width * (1. - DECK_SCALE) / 2.,
+                origin.y * (1. - DECK_SCALE),
+            ),
+            DECK_SCALE,
+        );
+        ui.ctx().set_transform_layer(layer, to_global);
+        for rect in self.deck_drop_rects.iter_mut() {
+            if rect.is_positive() {
+                *rect = to_global * *rect;
+            }
+        }
+        ui.allocate_exact_size(Vec2::new(width, used * DECK_SCALE), Sense::hover());
+    }
+    fn decks_ui(&mut self, ui: &mut egui::Ui) -> f32 {
+        self.header_cover_reflection = None;
+        if self.settings.cover_strip && self.settings.cover_reflections {
+            ui.add_space(6.);
+            let width = ui
+                .available_width()
+                .min(ui.clip_rect().right() - ui.cursor().left());
+            let (rect, _) =
+                ui.allocate_exact_size(Vec2::new(width, 2. * 72. / 20.), Sense::hover());
+            self.header_cover_reflection = Some(egui::Rect::from_min_max(
+                egui::pos2(ui.ctx().screen_rect().left(), rect.top()),
+                egui::pos2(ui.ctx().screen_rect().right(), rect.bottom()),
+            ));
+            ui.add_space(6.);
+        }
+
+        let deck_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.y = 0.;
+        if prospekt_dj::theme::classic() {
+            self.deck_rows(ui, deck_spacing);
+        } else {
+            self.scaled_deck_rows(ui, deck_spacing);
         }
         ui.spacing_mut().item_spacing = deck_spacing;
         if !self.settings.show_main_waveforms {
