@@ -1765,7 +1765,6 @@ impl Studio {
                         for texture in [&self.brand.icon, &self.brand.blue, &self.brand.green] {
                             let (rect, response) =
                                 ui.allocate_exact_size(Vec2::splat(48.), Sense::hover());
-                            soft_shadow(ui.painter(), rect);
                             ui.painter().image(
                                 texture.id(),
                                 rect,
