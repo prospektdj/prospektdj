@@ -177,6 +177,11 @@ impl AudioRuntime {
         // so the panel cannot be opened from here. Windows builds link without it.
         bail!("Panel ASIO nie jest dostępny w tej wersji programu.")
     }
+    /// True when the preview/PFL signal has a working output: a PFL device that
+    /// opened, or the ASIO channel pair chosen for monitoring.
+    pub fn phones_routed(&self) -> bool {
+        self._cue.is_some() || self.routing.cue.is_some()
+    }
     pub fn is_running(&self) -> bool {
         self.healthy.load(Ordering::Relaxed)
     }

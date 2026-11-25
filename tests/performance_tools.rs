@@ -116,3 +116,22 @@ fn loop_slots_capture_and_recall() {
         "empty slot ignored"
     );
 }
+
+#[test]
+fn preview_track_is_rendered_to_the_phones_output() {
+    let mut e = Engine::new(48000);
+    e.apply(Command::Preview(Some(track(2., 48000, 120., 0.))));
+    let mut phones_peak = 0f32;
+    let mut master_peak = 0f32;
+    for _ in 0..24_000 {
+        let (out, phones) = e.render();
+        phones_peak = phones_peak.max(phones[0].abs());
+        master_peak = master_peak.max(out[0].abs());
+    }
+    assert!(
+        phones_peak > 0.05,
+        "preview silent on PHONES: {phones_peak}"
+    );
+    assert_eq!(master_peak, 0., "preview must not reach MASTER");
+    assert!(e.snapshot().preview_playing);
+}

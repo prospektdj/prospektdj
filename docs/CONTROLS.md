@@ -43,3 +43,11 @@ Skróty bez zmian: Enter ładuje utwór na dek A, Shift+Enter na dek B, Spacja s
 ### Keyboard
 
 Unchanged: Enter loads a track to deck A, Shift+Enter to deck B, Space controls deck A, Shift+Space deck B. Press `?` for the full list.
+
+## 🇵🇱 Odsłuch poza dekami (PHONES / PFL)
+
+Odsłuch utworu z biblioteki idzie tylko na wyjście PFL/PHONES. Domyślnie jest ono wyłączone. Wybierz je w **Ustawienia → Audio → PFL** (w trybie systemowym) albo wybierz parę kanałów PFL w ASIO, a potem zastosuj ustawienia audio. Bez tego program pokaże komunikat zamiast odtwarzać w ciszy.
+
+## 🇬🇧 Preview outside the decks (PHONES / PFL)
+
+Library previews play only on the PFL/PHONES output. It is off by default. Choose it in **Settings → Audio → PFL** (system mode), or pick a PFL channel pair under ASIO, then apply the audio settings. Without it the program shows a message instead of playing silently.

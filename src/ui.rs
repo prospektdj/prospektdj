@@ -3574,6 +3574,15 @@ impl Studio {
         self.send(Command::Preview(None));
     }
     fn start_preview(&mut self, path: PathBuf) {
+        // Without a working PHONES/PFL output the preview would play into nothing.
+        if !self
+            .runtime
+            .as_ref()
+            .is_some_and(|r| r.is_running() && r.phones_routed())
+        {
+            self.status = "Odsłuch poza dekami wymaga wyjścia PFL/PHONES. Ustawienia → Audio: wybierz PFL i zastosuj ustawienia audio.".into();
+            return;
+        }
         self.stop_preview();
         self.preview_path = Some(path.clone());
         self.preview_loading = true;
