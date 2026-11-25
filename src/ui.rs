@@ -214,6 +214,14 @@ fn storage_category(ui: &mut egui::Ui, label: &str, kind: usize, body: impl FnOn
 }
 /// Header label: the original text in the classic skin, a short form in the modern one
 /// so the whole top bar stays inside the window.
+/// Size for the modern (compact) skins; the original skin keeps its size.
+fn modern_size(classic: f32, modern: f32) -> f32 {
+    if prospekt_dj::theme::classic() {
+        classic
+    } else {
+        modern
+    }
+}
 fn header_label(_long: &'static str, short: &'static str) -> &'static str {
     short
 }
@@ -2188,7 +2196,7 @@ impl Studio {
             .corner_radius(prospekt_dj::theme::radius())
             .stroke(Stroke::NONE)
             .show(ui, |ui| {
-                ui.set_min_height(204.);
+                ui.set_min_height(modern_size(204., 180.));
                 let show_platter = ui.ctx().screen_rect().width() >= 1200.;
                 // Modern skins use one gap between info and platter on both decks.
                 let jog_gap = if prospekt_dj::theme::classic() {
@@ -2506,7 +2514,7 @@ impl Studio {
     }
     fn pitch_bend(&mut self, ui: &mut egui::Ui, i: usize) {
         ui.allocate_ui_with_layout(
-            Vec2::new(32., 174.),
+            Vec2::new(32., modern_size(174., 150.)),
             egui::Layout::top_down(Align::Center),
             |ui| {
                 ui.set_width(32.);
@@ -2588,7 +2596,8 @@ impl Studio {
         response.on_hover_text("REVERS / Slip Reverse: trzymaj, aby grać do tyłu. Puść, aby wrócić do bieżącego miejsca utworu.")
     }
     fn white_platter(&mut self, ui: &mut egui::Ui, i: usize, d: &DeckView) {
-        let (response, p) = ui.allocate_painter(Vec2::new(148., 174.), Sense::click_and_drag());
+        let k = modern_size(1., 0.86);
+        let (response, p) = ui.allocate_painter(Vec2::new(148., 174. * k), Sense::click_and_drag());
         response.clone().context_menu(|ui| {
             if ui.button("Załaduj plik…").clicked() {
                 self.pick_track(i);
@@ -2610,23 +2619,23 @@ impl Studio {
                 ui.close_menu();
             }
         });
-        let center = egui::pos2(response.rect.center().x, response.rect.top() + 75.);
+        let center = egui::pos2(response.rect.center().x, response.rect.top() + 75. * k);
         let text = if self.settings.white_jog {
             Color32::BLACK
         } else {
             Color32::from_gray(235)
         };
-        p.circle_filled(center, 72., Color32::from_gray(35));
+        p.circle_filled(center, 72. * k, Color32::from_gray(35));
         p.circle_filled(
             center,
-            65.,
+            65. * k,
             if self.settings.white_jog {
                 Color32::WHITE
             } else {
                 Color32::from_gray(12)
             },
         );
-        p.circle_stroke(center, 66., Stroke::new(1_f32, Color32::from_gray(70)));
+        p.circle_stroke(center, 66. * k, Stroke::new(1_f32, Color32::from_gray(70)));
         if d.track.is_some() {
             let angle = (if self.settings.reduced_motion {
                 0.
@@ -2638,20 +2647,20 @@ impl Studio {
                 let theta = angle + n as f32 * std::f32::consts::TAU / 24.;
                 p.line_segment(
                     [
-                        center + Vec2::angled(theta) * 68.,
-                        center + Vec2::angled(theta) * 71.,
+                        center + Vec2::angled(theta) * 68. * k,
+                        center + Vec2::angled(theta) * 71. * k,
                     ],
                     Stroke::new(1_f32, Color32::from_gray(if n % 3 == 0 { 140 } else { 65 })),
                 );
             }
             let arc: Vec<_> = (0..16)
-                .map(|n| center + Vec2::angled(angle + n as f32 * 0.05) * 69.5)
+                .map(|n| center + Vec2::angled(angle + n as f32 * 0.05) * 69.5 * k)
                 .collect();
             p.add(egui::Shape::line(arc, Stroke::new(2_f32, ACCENTS[i])));
             p.line_segment(
                 [
-                    center + Vec2::angled(angle) * 64.,
-                    center + Vec2::angled(angle) * 72.,
+                    center + Vec2::angled(angle) * 64. * k,
+                    center + Vec2::angled(angle) * 72. * k,
                 ],
                 Stroke::new(3_f32, ACCENTS[i]),
             );
@@ -2664,12 +2673,12 @@ impl Studio {
             let needle = Color32::BLACK;
             if !self.settings.white_jog {
                 p.line_segment(
-                    [center - direction * 9., center + direction * 61.],
+                    [center - direction * 9., center + direction * 61. * k],
                     Stroke::new(11_f32, Color32::from_gray(95)),
                 );
             }
             p.line_segment(
-                [center - direction * 9., center + direction * 61.],
+                [center - direction * 9., center + direction * 61. * k],
                 Stroke::new(9_f32, needle.gamma_multiply(0.85)),
             );
             p.circle_filled(center, 7.2, Color32::from_rgb(153, 221, 255));
@@ -2686,7 +2695,7 @@ impl Studio {
                 (0..=steps)
                     .map(|n| {
                         let t = from + (to - from) * n as f32 / steps as f32;
-                        center + Vec2::angled(top + t * std::f32::consts::TAU) * 74.5
+                        center + Vec2::angled(top + t * std::f32::consts::TAU) * 74.5 * k
                     })
                     .collect()
             };
@@ -2756,7 +2765,7 @@ impl Studio {
             ),
         ] {
             p.text(
-                center + egui::vec2(0., dy),
+                center + egui::vec2(0., dy * k),
                 egui::Align2::CENTER_CENTER,
                 label,
                 if size >= 13. {
@@ -2776,12 +2785,12 @@ impl Studio {
             let needle = Color32::BLACK;
             if !self.settings.white_jog {
                 p.line_segment(
-                    [center - direction * 9., center + direction * 61.],
+                    [center - direction * 9., center + direction * 61. * k],
                     Stroke::new(11_f32, Color32::from_gray(95)),
                 );
             }
             p.line_segment(
-                [center - direction * 9., center + direction * 61.],
+                [center - direction * 9., center + direction * 61. * k],
                 Stroke::new(9_f32, needle),
             );
             p.circle_filled(center, 7.2, Color32::from_rgb(153, 221, 255));
@@ -2790,14 +2799,14 @@ impl Studio {
             }
         }
         p.text(
-            egui::pos2(center.x - 18., response.rect.top() + 161.),
+            egui::pos2(center.x - 18., response.rect.top() + 161. * k),
             egui::Align2::CENTER_CENTER,
             if d.scratch { "VINYL" } else { "JOG / BEND" },
             FontId::monospace(9.),
             ACCENTS[i],
         );
         let reverse_rect = egui::Rect::from_min_size(
-            response.rect.right_top() + egui::vec2(-48., 150.),
+            response.rect.right_top() + egui::vec2(-48., 150. * k),
             Vec2::splat(22.),
         );
         let reverse = ui
@@ -2806,7 +2815,7 @@ impl Studio {
             })
             .inner;
         let eject_rect = egui::Rect::from_min_size(
-            response.rect.right_top() + egui::vec2(-22., 150.),
+            response.rect.right_top() + egui::vec2(-22., 150. * k),
             Vec2::splat(22.),
         );
         let eject = ui
@@ -2959,8 +2968,10 @@ impl Studio {
             } else {
                 0.
             };
-        let waveform_rect =
-            egui::Rect::from_min_size(start, Vec2::new((right - start.x).max(1.), 33.));
+        let waveform_rect = egui::Rect::from_min_size(
+            start,
+            Vec2::new((right - start.x).max(1.), modern_size(33., 28.)),
+        );
         ui.painter().set(
             header_background,
             egui::Shape::rect_filled(
@@ -3076,8 +3087,10 @@ impl Studio {
                 ui.ctx().data_mut(|data| data.insert_temp(id, width));
             });
         }
-        let (lower_block, _) =
-            ui.allocate_exact_size(Vec2::new(waveform_rect.width(), 28.), Sense::hover());
+        let (lower_block, _) = ui.allocate_exact_size(
+            Vec2::new(waveform_rect.width(), modern_size(28., 24.)),
+            Sense::hover(),
+        );
         ui.painter().rect_filled(
             lower_block,
             prospekt_dj::theme::radius_f(4.),
@@ -3224,8 +3237,10 @@ impl Studio {
                     let n = row * 4 + col;
                     let color = cue_color(n);
                     let active = d.hot[n].is_some();
-                    let (rect, response) =
-                        ui.allocate_exact_size(Vec2::new(width, 28.), Sense::click());
+                    let (rect, response) = ui.allocate_exact_size(
+                        Vec2::new(width, modern_size(28., 24.)),
+                        Sense::click(),
+                    );
                     if prospekt_dj::theme::classic() {
                         let fill = if response.is_pointer_button_down_on() {
                             color.gamma_multiply(0.4)
@@ -9669,7 +9684,8 @@ fn transport_button(
     reduced: bool,
     width: f32,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 28.), Sense::click());
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(width, modern_size(28., 24.)), Sense::click());
     let hover = if reduced {
         if response.hovered() {
             1.
