@@ -1,5 +1,5 @@
 //! Original Prospekt P icons in pink, blue and green.
-use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use egui::{ColorImage, Context, TextureHandle};
 pub struct Brand {
     pub icon: TextureHandle,
     pub blue: TextureHandle,
@@ -17,7 +17,7 @@ impl Brand {
                 [icon_image.width() as usize, icon_image.height() as usize],
                 icon_image.as_raw(),
             ),
-            TextureOptions::LINEAR,
+            prospekt_dj::theme::image_texture_options(),
         );
         let variant = |name, bytes: &[u8]| {
             let image = image::load_from_memory(bytes)
@@ -30,7 +30,7 @@ impl Brand {
                     [image.width() as usize, image.height() as usize],
                     image.as_raw(),
                 ),
-                TextureOptions::LINEAR,
+                prospekt_dj::theme::image_texture_options(),
             )
         };
         Self {

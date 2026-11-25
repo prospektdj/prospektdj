@@ -159,6 +159,15 @@ pub fn palette() -> Palette {
         },
     }
 }
+/// Textures for logos, icons, emoji and covers: mipmapped, so images drawn smaller than
+/// their source stay smooth instead of pixelated.
+pub fn image_texture_options() -> egui::TextureOptions {
+    egui::TextureOptions {
+        mipmap_mode: Some(egui::TextureFilter::Linear),
+        ..egui::TextureOptions::LINEAR
+    }
+}
+
 /// Spacing unit for the modern skins: the same gap separates decks, platters,
 /// the mixer, pads and labels.
 pub const GAP: f32 = 10.;

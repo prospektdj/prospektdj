@@ -27,7 +27,7 @@ impl EmojiAtlas {
                 [img.width() as usize, img.height() as usize],
                 img.as_raw(),
             ),
-            Default::default(),
+            prospekt_dj::theme::image_texture_options(),
         );
         if self.textures.len() >= 128 {
             if let Some(old) = self

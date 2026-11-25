@@ -222,6 +222,21 @@ fn modern_size(classic: f32, modern: f32) -> f32 {
         modern
     }
 }
+/// Very light drop shadow under images (modern skins only).
+fn soft_shadow(painter: &egui::Painter, rect: egui::Rect) {
+    if prospekt_dj::theme::classic() {
+        return;
+    }
+    painter.add(
+        egui::epaint::Shadow {
+            offset: [0, 1],
+            blur: 6,
+            spread: 0,
+            color: Color32::from_black_alpha(80),
+        }
+        .as_shape(rect, 2.),
+    );
+}
 fn header_label(_long: &'static str, short: &'static str) -> &'static str {
     short
 }
@@ -1056,7 +1071,7 @@ impl Studio {
                 let texture = ctx.load_texture(
                     format!("art-{}", event.key),
                     egui::ColorImage::from_rgba_unmultiplied(image.size, &image.rgba),
-                    Default::default(),
+                    prospekt_dj::theme::image_texture_options(),
                 );
                 self.art_textures.insert(
                     event.key.clone(),
@@ -1748,8 +1763,16 @@ impl Studio {
                         let icon_spacing = ui.spacing().item_spacing.x;
                         ui.spacing_mut().item_spacing.x = 0.;
                         for texture in [&self.brand.icon, &self.brand.blue, &self.brand.green] {
-                            ui.add(egui::Image::new((texture.id(), Vec2::splat(48.))))
-                                .on_hover_text("Prospekt DJ");
+                            let (rect, response) =
+                                ui.allocate_exact_size(Vec2::splat(48.), Sense::hover());
+                            soft_shadow(ui.painter(), rect);
+                            ui.painter().image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                                Color32::WHITE,
+                            );
+                            response.on_hover_text("Prospekt DJ");
                         }
                         ui.spacing_mut().item_spacing.x = icon_spacing;
                         ui.add_space(icon_spacing);
@@ -2945,7 +2968,14 @@ impl Studio {
             let covers = &self.covers;
             let title = |ui: &mut egui::Ui| {
                 if let Some(texture) = &covers[i] {
-                    ui.image((texture.id(), Vec2::splat(30.)));
+                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(30.), Sense::hover());
+                    soft_shadow(ui.painter(), rect);
+                    ui.painter().image(
+                        texture.id(),
+                        rect,
+                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                        Color32::WHITE,
+                    );
                 }
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 0.;
@@ -6564,6 +6594,7 @@ impl Studio {
                         let size = art.texture.size_vec2();
                         let fitted = size * (72. / size.x.max(size.y));
                         let target = egui::Rect::from_center_size(rect.center(), fitted);
+                        soft_shadow(&painter, target);
                         painter.image(
                             art.texture.id(),
                             target,
