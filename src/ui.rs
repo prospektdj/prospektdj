@@ -8319,9 +8319,10 @@ impl Studio {
                     ui.add_enabled(!self.settings.reduced_motion, egui::Checkbox::new(&mut self.settings.blink_paused_play,"Miganie PLAY co pół sekundy, gdy utwór jest zatrzymany"));
                     ui.checkbox(&mut self.settings.show_statistics,"Statystyki systemowe");
                     ui.add(egui::Slider::new(&mut self.settings.refresh_hz,10..=120).text("Limit odświeżania / Hz"));
+                    // The slider only sets the target; `animate_zoom` glides to it each frame.
                     let mut zoom=self.settings.ui_scale;
-                    if ui.add(egui::Slider::new(&mut zoom,0.75..=1.75).text("Skala interfejsu")).changed(){self.settings.ui_scale=zoom;ctx.set_zoom_factor(zoom);}
-                    if ui.button("Przywróć domyślne").clicked(){self.settings.light=false;self.settings.reduced_motion=false;self.settings.show_statistics=true;self.settings.refresh_hz=30;self.settings.ui_scale=1.;ctx.set_zoom_factor(1.);console_theme(ctx,false);}
+                    if ui.add(egui::Slider::new(&mut zoom,0.75..=1.75).step_by(0.05).custom_formatter(|v,_| format!("{:.0}%", v*100.)).text("Skala interfejsu")).changed(){self.settings.ui_scale=zoom;}
+                    if ui.button("Przywróć domyślne").clicked(){self.settings.light=false;self.settings.reduced_motion=false;self.settings.show_statistics=true;self.settings.refresh_hz=30;self.settings.ui_scale=1.;console_theme(ctx,false);}
                 },
                 7=>{
                     ui.heading("Waveformy");
@@ -9308,8 +9309,23 @@ impl Studio {
             });
     }
 }
+impl Studio {
+    /// Moves the interface zoom a fraction of the remaining distance each frame, so
+    /// changing the scale in settings glides instead of jumping.
+    fn animate_zoom(&self, ctx: &egui::Context) {
+        let target = self.settings.ui_scale.clamp(0.75, 1.75);
+        let current = ctx.zoom_factor();
+        if (current - target).abs() > 0.002 {
+            ctx.set_zoom_factor(current + (target - current) * 0.25);
+            ctx.request_repaint();
+        } else if current != target {
+            ctx.set_zoom_factor(target);
+        }
+    }
+}
 impl eframe::App for Studio {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.animate_zoom(ctx);
         if let Some(result) = self
             .broadcast
             .as_ref()
