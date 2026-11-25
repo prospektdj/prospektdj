@@ -4567,10 +4567,18 @@ impl Studio {
                                 .max(library_rect.top()),
                         ),
                     );
-                    // Watermark is the background of the track list, drawn before the rows.
-                    if !classic_look && content_rect.height() >= 70. {
-                        let painter = ui.painter().with_clip_rect(content_rect);
-                        let center = content_rect.center();
+                    // Modern skins: the watermark keeps its place in the bottom band and is
+                    // drawn before the rows, so the generated track list covers it.
+                    let watermark_band = egui::Rect::from_min_max(
+                        egui::pos2(
+                            library_rect.left(),
+                            library_rect.bottom() - footer_height - 96.,
+                        ),
+                        egui::pos2(library_rect.right(), library_rect.bottom() - footer_height),
+                    );
+                    if !classic_look && watermark_band.height() >= 70. {
+                        let painter = ui.painter().with_clip_rect(watermark_band);
+                        let center = watermark_band.center();
                         let size = Vec2::splat(58. * 1.33);
                         let logo_rect =
                             egui::Rect::from_center_size(center - egui::vec2(0., 16.), size);
