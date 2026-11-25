@@ -6906,11 +6906,9 @@ impl Studio {
                         } else {
                             ui.visuals().faint_bg_color
                         }
-                    } else if prospekt_dj::theme::classic() {
-                        fill
                     } else {
-                        // Modern skins: translucent rows let the watermark show behind the list.
-                        fill.gamma_multiply(0.45)
+                        // Opaque rows: the track list covers the watermark behind it.
+                        fill
                     };
                     ui.painter()
                         .rect_filled(rect, prospekt_dj::theme::radius_f(3.), fill);
