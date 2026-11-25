@@ -6364,6 +6364,12 @@ impl Studio {
             ui.close_menu();
         }
     }
+    fn cover_drag_pointer(&self) -> egui::PointerButton {
+        match self.settings.cover_drag_button {
+            crate::settings::CoverDragButton::Right => egui::PointerButton::Secondary,
+            crate::settings::CoverDragButton::Left => egui::PointerButton::Primary,
+        }
+    }
     fn cover_drag_drop(&mut self, ctx: &egui::Context) {
         let Some((path, origin, mut moved)) = self.cover_drag.clone() else {
             return;
@@ -6408,11 +6414,7 @@ impl Studio {
                 FontId::proportional(12.),
                 Color32::WHITE,
             );
-            if ctx.input(|input| {
-                input
-                    .pointer
-                    .button_released(egui::PointerButton::Secondary)
-            }) {
+            if ctx.input(|input| input.pointer.button_released(self.cover_drag_pointer())) {
                 self.cover_drag = None;
                 if let Some(deck) = target {
                     self.load_manual(deck, path);
@@ -6420,7 +6422,7 @@ impl Studio {
                 return;
             }
         }
-        if !ctx.input(|input| input.pointer.button_down(egui::PointerButton::Secondary)) {
+        if !ctx.input(|input| input.pointer.button_down(self.cover_drag_pointer())) {
             self.cover_drag = None;
         }
     }
@@ -6441,9 +6443,12 @@ impl Studio {
             72.
         };
         let step = 72.;
+        // With the left button a drag starts a cover drag, so it must not scroll the strip.
+        let left_drag = self.settings.cover_drag_button == crate::settings::CoverDragButton::Left;
         let mut scroll = egui::ScrollArea::horizontal()
             .id_salt("cover-strip")
             .auto_shrink([false, false])
+            .drag_to_scroll(!left_drag)
             .max_height(height + 4.);
         if self.cover_reveal {
             if let Some(n) = rows.iter().position(|i| *i == self.selected) {
@@ -6475,12 +6480,11 @@ impl Studio {
                         Vec2::splat(72.),
                     );
                     let response = ui.interact(rect, ui.id().with(("art", index)), Sense::click());
+                    let drag_button = self.cover_drag_pointer();
                     if !entry.missing
                         && response.contains_pointer()
                         && !self.settings_open
-                        && ui.input(|input| {
-                            input.pointer.button_pressed(egui::PointerButton::Secondary)
-                        })
+                        && ui.input(|input| input.pointer.button_pressed(drag_button))
                     {
                         if let Some(position) = ui.input(|input| input.pointer.interact_pos()) {
                             self.cover_drag = Some((path.clone(), position, false));
@@ -8452,6 +8456,26 @@ impl Studio {
                     }
                     ui.label("Ukrywanie emotikon nie usuwa ich z nazw ani komentarzy. Wybór jest zapamiętywany.");
                     ui.checkbox(&mut self.settings.cover_strip,"Pokaż pasek okładek w bibliotece");
+                    ui.horizontal(|ui| {
+                        ui.label("Przeciąganie okładki na dek A–D:");
+                        egui::ComboBox::from_id_salt("cover-drag-button")
+                            .selected_text(match self.settings.cover_drag_button {
+                                crate::settings::CoverDragButton::Right => "prawym przyciskiem",
+                                crate::settings::CoverDragButton::Left => "lewym przyciskiem",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.settings.cover_drag_button,
+                                    crate::settings::CoverDragButton::Right,
+                                    "prawym przyciskiem",
+                                );
+                                ui.selectable_value(
+                                    &mut self.settings.cover_drag_button,
+                                    crate::settings::CoverDragButton::Left,
+                                    "lewym przyciskiem",
+                                );
+                            });
+                    });
                     ui.checkbox(&mut self.settings.show_library_clock,"Pokaż zegar z ikoną w bibliotece");
                     ui.checkbox(&mut self.settings.cover_reflections,"Paski odbić okładek").on_hover_text("Włącza odbicia pod okładkami, listą utworów oraz na górze i dole programu i pod waveformami.");
                     ui.checkbox(&mut self.settings.save_recommendation_history,"Zapisuj historię rekomendacji do plików TXT").on_hover_text("Folder recommendations w katalogu danych programu. Zapisy starsze niż 30 dni są usuwane automatycznie; wyłączenie zatrzymuje nowe wpisy.");

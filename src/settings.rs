@@ -58,6 +58,8 @@ pub struct Settings {
     pub banger_site_name: bool,
     pub banger_site_display_font: bool,
     pub cover_scroll_animation: bool,
+    /// Mouse button that drags a cover from the gallery onto a deck (A–D).
+    pub cover_drag_button: CoverDragButton,
     pub track_preview: bool,
     pub preview_column: bool,
     pub live_recommendations: bool,
@@ -140,6 +142,7 @@ impl Default for Settings {
             banger_site_name: true,
             banger_site_display_font: true,
             cover_scroll_animation: true,
+            cover_drag_button: CoverDragButton::Right,
             track_preview: true,
             preview_column: true,
             live_recommendations: true,
@@ -269,4 +272,12 @@ pub fn save(settings: &Settings) -> Result<()> {
     let temp = path.with_extension("tmp");
     std::fs::write(&temp, serde_json::to_vec_pretty(settings)?)?;
     std::fs::rename(temp, path).context("Nie udało się zapisać ustawień")
+}
+
+/// Mouse button used to drag a gallery cover onto a deck.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum CoverDragButton {
+    #[default]
+    Right,
+    Left,
 }
