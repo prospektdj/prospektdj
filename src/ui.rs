@@ -4550,13 +4550,44 @@ impl Studio {
                     } else {
                         0.
                     };
+                    // The list ends 12 px above the recommendations bar.
+                    let classic_look = prospekt_dj::theme::classic();
+                    let list_gap = if classic_look {
+                        96.
+                    } else if self.settings.live_recommendations {
+                        12.
+                    } else {
+                        0.
+                    };
                     let content_rect = egui::Rect::from_min_max(
                         library_rect.min,
                         egui::pos2(
                             library_rect.right(),
-                            (library_rect.bottom() - footer_height - 96.).max(library_rect.top()),
+                            (library_rect.bottom() - footer_height - list_gap)
+                                .max(library_rect.top()),
                         ),
                     );
+                    // Watermark is the background of the track list, drawn before the rows.
+                    if !classic_look && content_rect.height() >= 70. {
+                        let painter = ui.painter().with_clip_rect(content_rect);
+                        let center = content_rect.center();
+                        let size = Vec2::splat(58. * 1.33);
+                        let logo_rect =
+                            egui::Rect::from_center_size(center - egui::vec2(0., 16.), size);
+                        painter.image(
+                            self.brand.icon.id(),
+                            logo_rect,
+                            egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)),
+                            Color32::from_white_alpha(14),
+                        );
+                        painter.text(
+                            center + egui::vec2(0., 28.),
+                            egui::Align2::CENTER_CENTER,
+                            "PROSPEKT DJ v0.0.1 pre-alpha test",
+                            FontId::new(13., egui::FontFamily::Name("Arial Bold".into())),
+                            Color32::from_white_alpha(14),
+                        );
+                    }
                     self.library_last_row_bottom = None;
                     ui.scope_builder(egui::UiBuilder::new().max_rect(content_rect), |ui| {
                         ui.set_clip_rect(ui.clip_rect().intersect(content_rect));
@@ -4601,29 +4632,31 @@ impl Studio {
                             painter.add(egui::Shape::mesh(mesh));
                         }
                     }
-                    let watermark_rect = egui::Rect::from_min_max(
-                        egui::pos2(library_rect.left(), content_rect.bottom()),
-                        egui::pos2(library_rect.right(), library_rect.bottom() - footer_height),
-                    );
-                    if watermark_rect.height() >= 70. {
-                        let painter = ui.painter().with_clip_rect(watermark_rect);
-                        let center = watermark_rect.center();
-                        let size = Vec2::splat(58. * 1.33);
-                        let logo_rect =
-                            egui::Rect::from_center_size(center - egui::vec2(0., 16.), size);
-                        painter.image(
-                            self.brand.icon.id(),
-                            logo_rect,
-                            egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)),
-                            Color32::from_white_alpha(2),
+                    if classic_look {
+                        let watermark_rect = egui::Rect::from_min_max(
+                            egui::pos2(library_rect.left(), content_rect.bottom()),
+                            egui::pos2(library_rect.right(), library_rect.bottom() - footer_height),
                         );
-                        painter.text(
-                            center + egui::vec2(0., 28.),
-                            egui::Align2::CENTER_CENTER,
-                            "PROSPEKT DJ v0.0.1 pre-alpha test",
-                            FontId::new(13., egui::FontFamily::Name("Arial Bold".into())),
-                            Color32::from_white_alpha(2),
-                        );
+                        if watermark_rect.height() >= 70. {
+                            let painter = ui.painter().with_clip_rect(watermark_rect);
+                            let center = watermark_rect.center();
+                            let size = Vec2::splat(58. * 1.33);
+                            let logo_rect =
+                                egui::Rect::from_center_size(center - egui::vec2(0., 16.), size);
+                            painter.image(
+                                self.brand.icon.id(),
+                                logo_rect,
+                                egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)),
+                                Color32::from_white_alpha(2),
+                            );
+                            painter.text(
+                                center + egui::vec2(0., 28.),
+                                egui::Align2::CENTER_CENTER,
+                                "PROSPEKT DJ v0.0.1 pre-alpha test",
+                                FontId::new(13., egui::FontFamily::Name("Arial Bold".into())),
+                                Color32::from_white_alpha(2),
+                            );
+                        }
                     }
                     if self.settings.live_recommendations {
                         let footer_rect = egui::Rect::from_min_max(
@@ -6865,8 +6898,11 @@ impl Studio {
                         } else {
                             ui.visuals().faint_bg_color
                         }
-                    } else {
+                    } else if prospekt_dj::theme::classic() {
                         fill
+                    } else {
+                        // Modern skins: translucent rows let the watermark show behind the list.
+                        fill.gamma_multiply(0.45)
                     };
                     ui.painter()
                         .rect_filled(rect, prospekt_dj::theme::radius_f(3.), fill);
